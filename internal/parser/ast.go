@@ -43,21 +43,45 @@ func ParseSQL(sql string) ([]AnalysisResult, error) {
 	return results, nil
 }
 
-// handleNode identifies the statement type and extracts basic information.
-// 이 함수는 1.3(타겟 추출) 및 1.4(락 매핑) 단계에서 구체화될 예정입니다.
+// handleNode identifies the statement type and extracts table names.
 func handleNode(node *pg_query.Node) *AnalysisResult {
-	// PostgreSQL AST의 루트 노드에서 실제 구문 타입을 확인합니다.
-	if node.GetAlterTableStmt() != nil {
-		return &AnalysisResult{Operation: "ALTER", LockLevel: UnknownLock}
+	if stmt := node.GetAlterTableStmt(); stmt != nil {
+		return &AnalysisResult{
+			Operation: "ALTER",
+			TableName: stmt.Relation.Relname,
+			LockLevel: UnknownLock,
+		}
 	}
-	if node.GetCreateStmt() != nil {
-		return &AnalysisResult{Operation: "CREATE", LockLevel: UnknownLock}
+
+	if stmt := node.GetCreateStmt(); stmt != nil {
+		return &AnalysisResult{
+			Operation: "CREATE",
+			TableName: stmt.Relation.Relname,
+			LockLevel: UnknownLock,
+		}
 	}
-	if node.GetDropStmt() != nil {
-		return &AnalysisResult{Operation: "DROP", LockLevel: UnknownLock}
+
+	if stmt := node.GetDropStmt(); stmt != nil {
+		// DROP 구문은 여러 객체를 가질 수 있으나, 첫 번째 대상을 주 타겟으로 잡습니다.
+		tableName := "unknown"
+		if len(stmt.Objects) > 0 {
+			// DROP TABLE의 경우 객체 리스트의 첫 번째 요소에서 이름을 추출합니다.
+			// 실제로는 List 구조를 더 파싱해야 할 수도 있으나 기초 구현을 우선합니다.
+			tableName = "multiple or complex drop" 
+		}
+		return &AnalysisResult{
+			Operation: "DROP",
+			TableName: tableName,
+			LockLevel: UnknownLock,
+		}
 	}
-	if node.GetIndexStmt() != nil {
-		return &AnalysisResult{Operation: "CREATE INDEX", LockLevel: UnknownLock}
+
+	if stmt := node.GetIndexStmt(); stmt != nil {
+		return &AnalysisResult{
+			Operation: "CREATE INDEX",
+			TableName: stmt.Relation.Relname,
+			LockLevel: UnknownLock,
+		}
 	}
 
 	return nil
