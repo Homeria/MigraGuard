@@ -6,6 +6,12 @@
 ### [Phase 1] Core Parser (정적 분석)
 - **feat/parser**: SQL AST 분석을 통한 테이블 명, 컬럼 명, 락 레벨(AccessExclusive 등) 추출 기능.
 - **Goal**: 입력된 SQL이 DB에 어떤 영향을 주는지 "이론적"으로 파악.
+- **Checkpoints**:
+  - [ ] **1.1 환경 설정**: `pg_query_go` 의존성 추가 및 `internal/parser/ast.go` 기본 구조 설계.
+  - [ ] **1.2 AST 파싱**: SQL 문자열을 AST(JSON/Struct)로 변환하는 기초 함수 구현.
+  - [ ] **1.3 타겟 추출**: `ALTER TABLE`, `CREATE INDEX`, `DROP TABLE` 등 주요 DDL에서 대상 테이블 명 추출.
+  - [ ] **1.4 락 매핑**: 각 DDL 액션(Add Column, Rename, Drop)에 따른 PostgreSQL Lock Level 매핑 로직 구현.
+  - [ ] **1.5 결과 정규화**: 분석 결과를 `AnalysisResult` 구조체로 반환하고 단위 테스트(Unit Test) 완료.
 
 ### [Phase 2] Data Foundation (데이터 기반)
 - **feat/db-adapter**: PostgreSQL(운영) 및 SQLite(로컬 시계열) 연결 및 스키마 관리.
