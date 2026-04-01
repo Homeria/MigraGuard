@@ -1,1 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+migraguard
+
+# Go specific
+go-practice.exe
+migraguard.exe
+*.test
+*.prof
+
+# SQLite / Local Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+migrations/sqlite/
+
+# OS specific
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Project specific docs (already ignored)
 spec/total_spec.pdf
