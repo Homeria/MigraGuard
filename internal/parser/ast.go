@@ -10,11 +10,15 @@ import (
 type LockLevel string
 
 const (
-	AccessExclusiveLock LockLevel = "AccessExclusiveLock"
-	ExclusiveLock       LockLevel = "ExclusiveLock"
-	ShareLock           LockLevel = "ShareLock"
-	RowExclusiveLock    LockLevel = "RowExclusiveLock"
-	UnknownLock         LockLevel = "UnknownLock"
+	AccessExclusiveLock       LockLevel = "Access Exclusive"
+	ShareUpdateExclusiveLock  LockLevel = "Share Update Exclusive"
+	ShareRowExclusiveLock     LockLevel = "Share Row Exclusive"
+	ExclusiveLock             LockLevel = "Exclusive"
+	ShareLock                 LockLevel = "Share"
+	RowExclusiveLock          LockLevel = "Row Exclusive"
+	RowShareLock              LockLevel = "Row Share"
+	AccessShareLock           LockLevel = "Access Share"
+	UnknownLock               LockLevel = "Unknown"
 )
 
 // AnalysisResult holds the result of the SQL static analysis.
@@ -43,13 +47,15 @@ func ParseSQL(sql string) ([]AnalysisResult, error) {
 	return results, nil
 }
 
-// handleNode identifies the statement type and extracts table names.
+// handleNode identifies the statement type and determines the lock level.
 func handleNode(node *pg_query.Node) *AnalysisResult {
 	if stmt := node.GetAlterTableStmt(); stmt != nil {
 		return &AnalysisResult{
 			Operation: "ALTER",
 			TableName: stmt.Relation.Relname,
-			LockLevel: UnknownLock,
+			// ALTER TABLE은 기본적으로 Access Exclusive Lock을 필요로 합니다.
+			// (일부 서브 명령은 낮을 수 있으나 안전을 위해 보수적으로 설정)
+			LockLevel: AccessExclusiveLock,
 		}
 	}
 
@@ -57,30 +63,33 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 		return &AnalysisResult{
 			Operation: "CREATE",
 			TableName: stmt.Relation.Relname,
-			LockLevel: UnknownLock,
+			// 새 테이블 생성은 Access Exclusive Lock을 필요로 하지만 대상이 새 테이블이므로 영향도가 낮습니다.
+			LockLevel: AccessExclusiveLock,
 		}
 	}
 
 	if stmt := node.GetDropStmt(); stmt != nil {
-		// DROP 구문은 여러 객체를 가질 수 있으나, 첫 번째 대상을 주 타겟으로 잡습니다.
 		tableName := "unknown"
 		if len(stmt.Objects) > 0 {
-			// DROP TABLE의 경우 객체 리스트의 첫 번째 요소에서 이름을 추출합니다.
-			// 실제로는 List 구조를 더 파싱해야 할 수도 있으나 기초 구현을 우선합니다.
-			tableName = "multiple or complex drop" 
+			tableName = "complex drop"
 		}
 		return &AnalysisResult{
 			Operation: "DROP",
 			TableName: tableName,
-			LockLevel: UnknownLock,
+			LockLevel: AccessExclusiveLock,
 		}
 	}
 
 	if stmt := node.GetIndexStmt(); stmt != nil {
+		lockLevel := ShareLock // 기본 CREATE INDEX는 Share Lock
+		if stmt.Concurrent {
+			// CONCURRENTLY 옵션이 붙으면 Share Update Exclusive Lock으로 완화됩니다.
+			lockLevel = ShareUpdateExclusiveLock
+		}
 		return &AnalysisResult{
 			Operation: "CREATE INDEX",
 			TableName: stmt.Relation.Relname,
-			LockLevel: UnknownLock,
+			LockLevel: lockLevel,
 		}
 	}
 

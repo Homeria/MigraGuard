@@ -4,30 +4,30 @@ import (
 	"testing"
 )
 
-func TestParseSQL_TargetExtraction(t *testing.T) {
+func TestParseSQL_LockMapping(t *testing.T) {
 	tests := []struct {
-		name              string
-		sql               string
-		expectedOp        string
-		expectedTableName string
+		name             string
+		sql              string
+		expectedOp       string
+		expectedLock     LockLevel
 	}{
 		{
-			name:              "Alter Table",
-			sql:               "ALTER TABLE users ADD COLUMN age INT;",
-			expectedOp:        "ALTER",
-			expectedTableName: "users",
+			name:         "Alter Table Lock",
+			sql:          "ALTER TABLE users ADD COLUMN age INT;",
+			expectedOp:   "ALTER",
+			expectedLock: AccessExclusiveLock,
 		},
 		{
-			name:              "Create Table",
-			sql:               "CREATE TABLE orders (id SERIAL PRIMARY KEY);",
-			expectedOp:        "CREATE",
-			expectedTableName: "orders",
+			name:         "Standard Index Lock",
+			sql:          "CREATE INDEX idx_user_email ON profile(email);",
+			expectedOp:   "CREATE INDEX",
+			expectedLock: ShareLock,
 		},
 		{
-			name:              "Create Index",
-			sql:               "CREATE INDEX idx_user_email ON profile(email);",
-			expectedOp:        "CREATE INDEX",
-			expectedTableName: "profile",
+			name:         "Concurrent Index Lock",
+			sql:          "CREATE INDEX CONCURRENTLY idx_user_email ON profile(email);",
+			expectedOp:   "CREATE INDEX",
+			expectedLock: ShareUpdateExclusiveLock,
 		},
 	}
 
@@ -47,8 +47,8 @@ func TestParseSQL_TargetExtraction(t *testing.T) {
 				t.Errorf("Expected operation %s, got %s", tt.expectedOp, results[0].Operation)
 			}
 
-			if results[0].TableName != tt.expectedTableName {
-				t.Errorf("Expected table %s, got %s", tt.expectedTableName, results[0].TableName)
+			if results[0].LockLevel != tt.expectedLock {
+				t.Errorf("Expected lock %s, got %s", tt.expectedLock, results[0].LockLevel)
 			}
 		})
 	}
