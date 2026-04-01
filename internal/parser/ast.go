@@ -10,23 +10,23 @@ import (
 type LockLevel string
 
 const (
-	AccessExclusiveLock       LockLevel = "Access Exclusive"
-	ShareUpdateExclusiveLock  LockLevel = "Share Update Exclusive"
-	ShareRowExclusiveLock     LockLevel = "Share Row Exclusive"
-	ExclusiveLock             LockLevel = "Exclusive"
-	ShareLock                 LockLevel = "Share"
-	RowExclusiveLock          LockLevel = "Row Exclusive"
-	RowShareLock              LockLevel = "Row Share"
-	AccessShareLock           LockLevel = "Access Share"
-	UnknownLock               LockLevel = "Unknown"
+	AccessExclusiveLock      LockLevel = "Access Exclusive"
+	ShareUpdateExclusiveLock LockLevel = "Share Update Exclusive"
+	ShareRowExclusiveLock    LockLevel = "Share Row Exclusive"
+	ExclusiveLock            LockLevel = "Exclusive"
+	ShareLock                LockLevel = "Share"
+	RowExclusiveLock         LockLevel = "Row Exclusive"
+	RowShareLock             LockLevel = "Row Share"
+	AccessShareLock          LockLevel = "Access Share"
+	UnknownLock              LockLevel = "Unknown"
 )
 
 // AnalysisResult holds the result of the SQL static analysis.
 type AnalysisResult struct {
 	TableName string
 	LockLevel LockLevel
-	Operation string // 작업 유형: CREATE, ALTER, DROP 등
-	Columns   []string
+	Operation string   // 작업 유형: CREATE, ALTER, DROP 등
+	Columns   []string // 영향받는 컬럼 목록
 }
 
 // ParseSQL analyzes the provided SQL string and returns a slice of AnalysisResult.
@@ -47,31 +47,46 @@ func ParseSQL(sql string) ([]AnalysisResult, error) {
 	return results, nil
 }
 
-// handleNode identifies the statement type and determines the lock level.
+// handleNode identifies the statement type and populates AnalysisResult.
 func handleNode(node *pg_query.Node) *AnalysisResult {
 	if stmt := node.GetAlterTableStmt(); stmt != nil {
-		return &AnalysisResult{
+		res := &AnalysisResult{
 			Operation: "ALTER",
 			TableName: stmt.Relation.Relname,
-			// ALTER TABLE은 기본적으로 Access Exclusive Lock을 필요로 합니다.
-			// (일부 서브 명령은 낮을 수 있으나 안전을 위해 보수적으로 설정)
 			LockLevel: AccessExclusiveLock,
 		}
+		// ALTER TABLE 명령들에서 컬럼명 추출 시도
+		for _, cmd := range stmt.Cmds {
+			if sub := cmd.GetAlterTableCmd(); sub != nil {
+				if sub.Name != "" {
+					res.Columns = append(res.Columns, sub.Name)
+				}
+			}
+		}
+		return res
 	}
 
 	if stmt := node.GetCreateStmt(); stmt != nil {
-		return &AnalysisResult{
+		res := &AnalysisResult{
 			Operation: "CREATE",
 			TableName: stmt.Relation.Relname,
-			// 새 테이블 생성은 Access Exclusive Lock을 필요로 하지만 대상이 새 테이블이므로 영향도가 낮습니다.
 			LockLevel: AccessExclusiveLock,
 		}
+		// CREATE TABLE의 컬럼 정의 추출
+		for _, el := range stmt.TableElts {
+			if def := el.GetColumnDef(); def != nil {
+				res.Columns = append(res.Columns, def.Colname)
+			}
+		}
+		return res
 	}
 
 	if stmt := node.GetDropStmt(); stmt != nil {
 		tableName := "unknown"
+		// DROP TABLE users -> Objects[0]에서 이름 추출 시도
 		if len(stmt.Objects) > 0 {
-			tableName = "complex drop"
+			// 실제 AST 구조는 List 내의 List 형태로 복잡하므로 기초적인 추출만 수행
+			tableName = "target object" 
 		}
 		return &AnalysisResult{
 			Operation: "DROP",
@@ -81,9 +96,8 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 	}
 
 	if stmt := node.GetIndexStmt(); stmt != nil {
-		lockLevel := ShareLock // 기본 CREATE INDEX는 Share Lock
+		lockLevel := ShareLock
 		if stmt.Concurrent {
-			// CONCURRENTLY 옵션이 붙으면 Share Update Exclusive Lock으로 완화됩니다.
 			lockLevel = ShareUpdateExclusiveLock
 		}
 		return &AnalysisResult{

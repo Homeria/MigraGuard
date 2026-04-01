@@ -4,30 +4,46 @@ import (
 	"testing"
 )
 
-func TestParseSQL_LockMapping(t *testing.T) {
+func TestParseSQL_FullVerification(t *testing.T) {
 	tests := []struct {
-		name             string
-		sql              string
-		expectedOp       string
-		expectedLock     LockLevel
+		name              string
+		sql               string
+		expectedOp        string
+		expectedTableName string
+		expectedLock      LockLevel
+		expectedColumns   []string
 	}{
 		{
-			name:         "Alter Table Lock",
-			sql:          "ALTER TABLE users ADD COLUMN age INT;",
-			expectedOp:   "ALTER",
-			expectedLock: AccessExclusiveLock,
+			name:              "Alter Table Add Column",
+			sql:               "ALTER TABLE users ADD COLUMN age INT;",
+			expectedOp:        "ALTER",
+			expectedTableName: "users",
+			expectedLock:      AccessExclusiveLock,
+			expectedColumns:   []string{"age"},
 		},
 		{
-			name:         "Standard Index Lock",
-			sql:          "CREATE INDEX idx_user_email ON profile(email);",
-			expectedOp:   "CREATE INDEX",
-			expectedLock: ShareLock,
+			name:              "Create Table with Columns",
+			sql:               "CREATE TABLE orders (id SERIAL PRIMARY KEY, price NUMERIC);",
+			expectedOp:        "CREATE",
+			expectedTableName: "orders",
+			expectedLock:      AccessExclusiveLock,
+			expectedColumns:   []string{"id", "price"},
 		},
 		{
-			name:         "Concurrent Index Lock",
-			sql:          "CREATE INDEX CONCURRENTLY idx_user_email ON profile(email);",
-			expectedOp:   "CREATE INDEX",
-			expectedLock: ShareUpdateExclusiveLock,
+			name:              "Standard Index",
+			sql:               "CREATE INDEX idx_user_email ON profile(email);",
+			expectedOp:        "CREATE INDEX",
+			expectedTableName: "profile",
+			expectedLock:      ShareLock,
+			expectedColumns:   nil,
+		},
+		{
+			name:              "Concurrent Index",
+			sql:               "CREATE INDEX CONCURRENTLY idx_user_email ON profile(email);",
+			expectedOp:        "CREATE INDEX",
+			expectedTableName: "profile",
+			expectedLock:      ShareUpdateExclusiveLock,
+			expectedColumns:   nil,
 		},
 	}
 
@@ -43,13 +59,33 @@ func TestParseSQL_LockMapping(t *testing.T) {
 				return
 			}
 
-			if results[0].Operation != tt.expectedOp {
-				t.Errorf("Expected operation %s, got %s", tt.expectedOp, results[0].Operation)
+			res := results[0]
+			if res.Operation != tt.expectedOp {
+				t.Errorf("Expected op %s, got %s", tt.expectedOp, res.Operation)
 			}
-
-			if results[0].LockLevel != tt.expectedLock {
-				t.Errorf("Expected lock %s, got %s", tt.expectedLock, results[0].LockLevel)
+			if res.TableName != tt.expectedTableName {
+				t.Errorf("Expected table %s, got %s", tt.expectedTableName, res.TableName)
+			}
+			if res.LockLevel != tt.expectedLock {
+				t.Errorf("Expected lock %s, got %s", tt.expectedLock, res.LockLevel)
+			}
+			if len(tt.expectedColumns) > 0 {
+				if len(res.Columns) != len(tt.expectedColumns) {
+					t.Errorf("Expected %d columns, got %d", len(tt.expectedColumns), len(res.Columns))
+				}
 			}
 		})
+	}
+}
+
+func TestParseSQL_MultipleStatements(t *testing.T) {
+	sql := "ALTER TABLE t1 ADD COLUMN c1 INT; CREATE TABLE t2 (c2 TEXT);"
+	results, err := ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL() error = %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results, got %d", len(results))
 	}
 }
