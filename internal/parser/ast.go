@@ -86,7 +86,7 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 		// DROP TABLE users -> Objects[0]에서 이름 추출 시도
 		if len(stmt.Objects) > 0 {
 			// 실제 AST 구조는 List 내의 List 형태로 복잡하므로 기초적인 추출만 수행
-			tableName = "target object" 
+			tableName = "target object"
 		}
 		return &AnalysisResult{
 			Operation: "DROP",
