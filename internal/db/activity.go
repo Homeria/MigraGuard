@@ -93,6 +93,48 @@ func (a *SQLiteAdapter) SaveSnapshots(snapshots []WorkloadSnapshot) error {
 	return tx.Commit()
 }
 
+// TableStats represents aggregated traffic statistics for a table from local storage.
+// 로컬 저장소에서 집계된 테이블 트래픽 통계를 나타냅니다.
+type TableStats struct {
+	TableName   string
+	AvgCalls    float64
+	MaxCalls    int64
+	TotalTime   float64
+	SnapshotCnt int
+}
+
+// GetHistoricalStats analyzes workload snapshots to provide traffic statistics for a specific table.
+// 워크로드 스냅샷을 분석하여 특정 테이블에 대한 트래픽 통계를 제공합니다.
+func (a *SQLiteAdapter) GetHistoricalStats(tableName string) (*TableStats, error) {
+	// Simple pattern matching for the table name in queries.
+	// 쿼리 내에서 테이블명을 포함하는 데이터를 조회합니다.
+	query := `
+		SELECT 
+			AVG(calls) as avg_calls, 
+			MAX(calls) as max_calls, 
+			SUM(total_time) as total_time,
+			COUNT(*) as snapshot_cnt
+		FROM workload_snapshots
+		WHERE query LIKE ?;
+	`
+	
+	pattern := "%" + tableName + "%"
+	row := a.db.QueryRow(query, pattern)
+
+	var stats TableStats
+	stats.TableName = tableName
+	
+	err := row.Scan(&stats.AvgCalls, &stats.MaxCalls, &stats.TotalTime, &stats.SnapshotCnt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &stats, nil
+		}
+		return nil, fmt.Errorf("failed to aggregate historical stats: %w", err)
+	}
+
+	return &stats, nil
+}
+
 // Close closes the SQLite database connection.
 // SQLite 데이터베이스 연결을 닫습니다.
 func (a *SQLiteAdapter) Close() error {

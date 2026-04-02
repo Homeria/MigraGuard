@@ -15,9 +15,9 @@
 - **feat/db-adapter & feat/collector**: 운영 DB 연결 및 로컬 시계열 데이터 저장소 구축.
 - **Checkpoints**:
   - [x] **2.1 DB 연결 (PostgreSQL)**: `jackc/pgx`를 사용하여 운영 DB 연결 및 `pg_stat_statements` 조회 기능.
-  - [ ] **2.2 로컬 저장소 (SQLite)**: SQLite 스키마 설계 및 WAL 모드 기반의 시계열 데이터 저장소 구축.
-  - [ ] **2.3 백그라운드 컬렉터**: 고루틴 Ticker를 이용한 주기적인 워크로드 스냅샷 캡처 로직.
-  - [ ] **2.4 데이터 액세스 레이어**: 특정 테이블의 과거 트래픽 통계를 조회하는 Repository 구현.
+  - [x] **2.2 로컬 저장소 (SQLite)**: SQLite 스키마 설계 및 WAL 모드 기반의 시계열 데이터 저장소 구축.
+  - [x] **2.3 백그라운드 컬렉터**: 고루틴 Ticker를 이용한 주기적인 워크로드 스냅샷 캡처 로직.
+  - [x] **2.4 데이터 액세스 레이어**: 특정 테이블의 과거 트래픽 통계를 조회하는 Repository 구현.
 
 ### [Phase 3] Risk Engine (판단 로직)
 - **feat/risk-engine**: 데이터 결합 및 위험도 산출 알고리즘 구현.
