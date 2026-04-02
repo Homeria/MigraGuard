@@ -11,7 +11,7 @@
   - [x] **1.4 락 매핑**: `CONCURRENTLY` 유무 등에 따른 PostgreSQL Lock Level 매핑 로직 구현.
   - [x] **1.5 결과 정규화**: 컬럼 추출 추가 및 전체 케이스 단위 테스트(Unit Test) 완료.
 
-### [Phase 2] Data Foundation (데이터 기반) - 🛠️ 다음 작업
+### [Phase 2] Data Foundation (데이터 기반) - ✅ 완료
 - **feat/db-adapter & feat/collector**: 운영 DB 연결 및 로컬 시계열 데이터 저장소 구축.
 - **Checkpoints**:
   - [x] **2.1 DB 연결 (PostgreSQL)**: `jackc/pgx`를 사용하여 운영 DB 연결 및 `pg_stat_statements` 조회 기능.
@@ -19,7 +19,7 @@
   - [x] **2.3 백그라운드 컬렉터**: 고루틴 Ticker를 이용한 주기적인 워크로드 스냅샷 캡처 로직.
   - [x] **2.4 데이터 액세스 레이어**: 특정 테이블의 과거 트래픽 통계를 조회하는 Repository 구현.
 
-### [Phase 3] Risk Engine (판단 로직)
+### [Phase 3] Risk Engine (판단 로직) - 🛠️ 다음 작업
 - **feat/risk-engine**: 데이터 결합 및 위험도 산출 알고리즘 구현.
 - **Checkpoints**:
   - [ ] **3.1 리스크 알고리즘**: `Traffic * Lock * Wait` 기반의 정량적 Risk Score 산출 로직.
@@ -45,9 +45,9 @@
 main
   └── develop
         ├── feat/parser (Merged ✅)
-        ├── feat/db-adapter (Current 🛠️)
-        ├── feat/collector
-        ├── feat/risk-engine
+        ├── feat/db-adapter (Merged ✅)
+        ├── feat/collector (Merged ✅)
+        ├── feat/risk-engine (Next 🛠️)
         └── feat/reporter
 ```
 
