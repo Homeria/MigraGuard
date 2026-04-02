@@ -14,7 +14,7 @@
 ### [Phase 2] Data Foundation (데이터 기반) - 🛠️ 다음 작업
 - **feat/db-adapter & feat/collector**: 운영 DB 연결 및 로컬 시계열 데이터 저장소 구축.
 - **Checkpoints**:
-  - [ ] **2.1 DB 연결 (PostgreSQL)**: `jackc/pgx`를 사용하여 운영 DB 연결 및 `pg_stat_statements` 조회 기능.
+  - [x] **2.1 DB 연결 (PostgreSQL)**: `jackc/pgx`를 사용하여 운영 DB 연결 및 `pg_stat_statements` 조회 기능.
   - [ ] **2.2 로컬 저장소 (SQLite)**: SQLite 스키마 설계 및 WAL 모드 기반의 시계열 데이터 저장소 구축.
   - [ ] **2.3 백그라운드 컬렉터**: 고루틴 Ticker를 이용한 주기적인 워크로드 스냅샷 캡처 로직.
   - [ ] **2.4 데이터 액세스 레이어**: 특정 테이블의 과거 트래픽 통계를 조회하는 Repository 구현.

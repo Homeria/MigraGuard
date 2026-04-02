@@ -1,0 +1,79 @@
+package db
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// PostgresAdapter manages connections to the target PostgreSQL database.
+// 대상 PostgreSQL 데이터베이스에 대한 연결을 관리합니다.
+type PostgresAdapter struct {
+	pool *pgxpool.Pool
+	url  string
+}
+
+// Config represents the database connection configuration.
+// 데이터베이스 연결 설정을 나타냅니다.
+type Config struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
+	SSLMode  string
+}
+
+// NewPostgresAdapter creates a new PostgresAdapter instance.
+// 새로운 PostgresAdapter 인스턴스를 생성합니다.
+func NewPostgresAdapter(url string) *PostgresAdapter {
+	return &PostgresAdapter{
+		url: url,
+	}
+}
+
+// Connect establishes a connection pool to the PostgreSQL server.
+// PostgreSQL 서버에 대한 연결 풀을 생성합니다.
+func (a *PostgresAdapter) Connect(ctx context.Context) error {
+	config, err := pgxpool.ParseConfig(a.url)
+	if err != nil {
+		return fmt.Errorf("failed to parse connection URL: %w", err)
+	}
+
+	// Set default pool settings
+	// 기본 풀 설정을 구성합니다.
+	config.MaxConns = 10
+	config.MinConns = 2
+	config.MaxConnLifetime = time.Hour
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return fmt.Errorf("failed to create connection pool: %w", err)
+	}
+
+	// Ping the database to verify the connection
+	// 연결 확인을 위해 데이터베이스에 핑을 보냅니다.
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	a.pool = pool
+	return nil
+}
+
+// Close terminates the connection pool.
+// 연결 풀을 종료합니다.
+func (a *PostgresAdapter) Close() {
+	if a.pool != nil {
+		a.pool.Close()
+	}
+}
+
+// GetPool returns the underlying pgxpool.Pool instance.
+// 내부의 pgxpool.Pool 인스턴스를 반환합니다.
+func (a *PostgresAdapter) GetPool() *pgxpool.Pool {
+	return a.pool
+}
