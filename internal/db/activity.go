@@ -50,6 +50,19 @@ func (a *SQLiteAdapter) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_workload_timestamp ON workload_snapshots(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_workload_query_id ON workload_snapshots(query_id);
+
+	CREATE TABLE IF NOT EXISTS table_metrics (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+		table_name TEXT,
+		table_size BIGINT,
+		replication_lag DOUBLE,
+		active_connections INTEGER,
+		p99_time DOUBLE,
+		tps DOUBLE
+	);
+	CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON table_metrics(timestamp);
+	CREATE INDEX IF NOT EXISTS idx_metrics_table_name ON table_metrics(table_name);
 	`
 	_, err := a.db.Exec(query)
 	return err
@@ -91,6 +104,56 @@ func (a *SQLiteAdapter) SaveSnapshots(snapshots []WorkloadSnapshot) error {
 	}
 
 	return tx.Commit()
+}
+
+// SaveTableMetrics persists dynamic table metrics to the SQLite database.
+// 테이블의 동적 지표를 SQLite 데이터베이스에 저장합니다.
+func (a *SQLiteAdapter) SaveTableMetrics(m *TableDynamicMetrics) error {
+	query := `
+		INSERT INTO table_metrics (
+			timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps
+		) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := a.db.Exec(query, 
+		m.TableName, 
+		m.TableSize, 
+		m.ReplicationLag, 
+		m.ActiveConnections, 
+		m.P99Time, 
+		m.TPS,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save table metrics: %w", err)
+	}
+	return nil
+}
+
+// GetLatestTableMetrics retrieves the most recent metrics for a specific table.
+// 특정 테이블에 대한 가장 최신의 동적 지표를 조회합니다.
+func (a *SQLiteAdapter) GetLatestTableMetrics(tableName string) (*TableDynamicMetrics, error) {
+	query := `
+		SELECT table_name, table_size, replication_lag, active_connections, p99_time, tps
+		FROM table_metrics
+		WHERE table_name = ?
+		ORDER BY timestamp DESC
+		LIMIT 1;
+	`
+	var m TableDynamicMetrics
+	err := a.db.QueryRow(query, tableName).Scan(
+		&m.TableName,
+		&m.TableSize,
+		&m.ReplicationLag,
+		&m.ActiveConnections,
+		&m.P99Time,
+		&m.TPS,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get latest table metrics: %w", err)
+	}
+	return &m, nil
 }
 
 // TableStats represents aggregated traffic statistics for a table from local storage.
