@@ -205,3 +205,32 @@ func (a *SQLiteAdapter) Close() error {
 	}
 	return nil
 }
+
+// PurgeOldSnapshots deletes snapshots older than the retention days and optimizes SQLite.
+// 설정된 보존 기간(retentionDays)보다 오래된 스냅샷 데이터를 삭제하고 SQLite 공간을 최적화합니다.
+func (a *SQLiteAdapter) PurgeOldSnapshots(retentionDays int) error {
+	// 1. Delete old workload snapshots
+	// 오래된 워크로드 스냅샷을 삭제합니다.
+	workloadQuery := `DELETE FROM workload_snapshots WHERE timestamp < datetime('now', '-' || ? || ' days')`
+	_, err := a.db.Exec(workloadQuery, retentionDays)
+	if err != nil {
+		return fmt.Errorf("failed to purge old workload snapshots: %w", err)
+	}
+
+	// 2. Delete old table metrics
+	// 오래된 테이블 지표를 삭제합니다.
+	metricsQuery := `DELETE FROM table_metrics WHERE timestamp < datetime('now', '-' || ? || ' days')`
+	_, err = a.db.Exec(metricsQuery, retentionDays)
+	if err != nil {
+		return fmt.Errorf("failed to purge old table metrics: %w", err)
+	}
+
+	// 3. VACUUM the database to reclaim space
+	// SQLite의 VACUUM 명령을 실행하여 삭제된 공간을 회수하고 최적화합니다.
+	_, err = a.db.Exec("VACUUM")
+	if err != nil {
+		return fmt.Errorf("failed to vacuum sqlite: %w", err)
+	}
+
+	return nil
+}

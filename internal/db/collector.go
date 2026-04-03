@@ -9,23 +9,31 @@ import (
 // Collector orchestrates the background data collection from Postgres to SQLite.
 // Postgres에서 SQLite로의 백그라운드 데이터 수집을 조율합니다.
 type Collector struct {
-	pg           *PostgresAdapter
-	sqlite       *SQLiteAdapter
-	interval     time.Duration
-	targetTables []string
-	stopChan     chan struct{}
+	pg            *PostgresAdapter
+	sqlite        *SQLiteAdapter
+	interval      time.Duration
+	retentionDays int
+	targetTables  []string
+	stopChan      chan struct{}
 }
 
 // NewCollector creates a new Collector instance.
 // 새로운 Collector 인스턴스를 생성합니다.
 func NewCollector(pg *PostgresAdapter, sqlite *SQLiteAdapter, interval time.Duration) *Collector {
 	return &Collector{
-		pg:           pg,
-		sqlite:       sqlite,
-		interval:     interval,
-		targetTables: []string{}, // Initialize with an empty list
-		stopChan:     make(chan struct{}),
+		pg:            pg,
+		sqlite:        sqlite,
+		interval:      interval,
+		retentionDays: 7,          // Default retention: 7 days
+		targetTables:  []string{}, // Initialize with an empty list
+		stopChan:      make(chan struct{}),
 	}
+}
+
+// SetRetentionDays sets the data retention period in days.
+// 데이터 보존 기간(일 단위)을 설정합니다.
+func (c *Collector) SetRetentionDays(days int) {
+	c.retentionDays = days
 }
 
 // AddTargetTable adds a table to the monitoring list for dynamic metrics collection.
@@ -104,6 +112,12 @@ func (c *Collector) collect(ctx context.Context) error {
 		} else {
 			log.Printf("Successfully collected dynamic metrics for table: %s", table)
 		}
+	}
+
+	// 5. Purge old snapshots (Retention Policy)
+	// 설정된 보존 기간을 초과한 오래된 데이터를 정리합니다.
+	if err := c.sqlite.PurgeOldSnapshots(c.retentionDays); err != nil {
+		log.Printf("Error purging old snapshots: %v", err)
 	}
 
 	return nil
