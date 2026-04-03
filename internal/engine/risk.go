@@ -63,11 +63,19 @@ func NewRiskEngine(pg *db.PostgresAdapter, sqlite *db.SQLiteAdapter, constants R
 // AnalyzeRisk performs the 5-step risk assessment for a given DDL analysis result.
 // 주어진 DDL 분석 결과를 바탕으로 5단계 위험도 평가를 수행합니다.
 func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisResult) (*RiskAnalysisReport, error) {
-	// 1. Get Dynamic Metrics
-	// 운영 DB로부터 최신 동적 지표를 가져옵니다.
+	// 1. Get Dynamic Metrics from Postgres (Size, Conns, etc.)
 	metrics, err := e.pg.GetTableDynamicMetrics(ctx, analysis.TableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch dynamic metrics: %w", err)
+	}
+
+	// [L22] Override TPS with real-time delta from SQLite if available.
+	// 누적 평균 대신 SQLite의 최근 스냅샷 차이(Delta)를 이용한 실제 TPS를 사용합니다.
+	if e.sqlite != nil {
+		realtimeTPS, err := e.sqlite.GetRecentTPSDelta(analysis.TableName)
+		if err == nil && realtimeTPS > 0 {
+			metrics.TPS = realtimeTPS
+		}
 	}
 
 	report := &RiskAnalysisReport{}

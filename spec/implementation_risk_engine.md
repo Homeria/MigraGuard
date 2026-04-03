@@ -1,28 +1,32 @@
-# MigraGuard Phase 3: Risk Engine 구현 리포트 (v3.0 고도화)
+# MigraGuard v3.1: 리스크 엔진 구현 명세서 (Baseline 기반)
 
 ## 1. 구현 개요
-- **목적**: 대기행렬 이론(Queuing Theory)을 기반으로 DDL 실행 시 발생하는 커넥션 급증 및 연쇄 장애 리스크를 정량적으로 산출.
-- **핵심 모듈**: `internal/engine/risk.go`
+- **목적**: 축적된 시계열 데이터를 바탕으로 현재 및 잠재적 리스크를 즉각적으로 분석.
+- **핵심 모듈**: `internal/engine/risk.go`, `cmd/migraguard/analyze.go`
 
-## 2. v3.0 수학적 모델 구현 상세
-- **Step 1. $T_{ddl}$ 추정**:
-    - 파서의 `RewriteRequired`($F_{rewrite}$) 플래그와 DB의 `TableSize`($S_{table}$)를 결합하여 물리적 소요 시간 계산.
-- **Step 2. $T_{block}$ 산출**:
-    - $T_{p99}$ (꼬리 지연) + $T_{ddl}$ (실행 시간) + $Lag_{repl}$ (복제 지연)을 합산하여 총 블로킹 시간 도출.
-- **Step 3. $C_{peak}$ 산출**:
-    - $C_{active} + (\lambda \times T_{block})$ 공식을 통해 락 해제 직후의 최대 커넥션 요구량 예측.
-- **Step 4. $T_{rec}$ 및 영구 장애 판단**:
-    - 시스템 최대 처리량($\mu_{max}$) 대비 유입량($\lambda$)을 비교하여 회복 시간($T_{rec}$) 산출.
-    - $\lambda \geq \mu_{max}$인 경우 `PermanentFailure`로 판별.
-- **Step 5. $RiskScore(\%)$ 산출**:
-    - $(C_{peak} / C_{max}) \times 100$을 통해 커넥션 고갈 위험도를 점수화.
+## 2. v3.1 분석 모델 상세 (Baseline Analysis)
 
-## 3. 주요 데이터 구조
-### `RiskAnalysisReport` 구조체
-- `RiskScore`: 최종 위험도 점수.
-- `RecoveryTime`: 시스템이 정상 상태로 돌아오는 데 걸리는 시간.
-- `RiskLevel`: Danger (90%+), Warning (60%+), Safe 기준 분류.
+### 2.1. 3초 대기 제거 (Instant Analytics)
+- 기존 v3.0의 `time.Sleep(3s)`을 통한 델타 계산 방식을 제거.
+- 분석 시점에 SQLite에 저장된 **최신 2개 이상의 스냅샷**을 즉시 조회하여 델타 TPS 산출.
+
+### 2.2. 다중 TPS 가중치 적용 ($\lambda_{final}$)
+- 단순 현재 TPS뿐만 아니라 통계적 지표를 결합하여 신뢰도 향상.
+- **$\lambda_{curr}$**: 가장 최근 1분의 실시간 유입량.
+- **$\lambda_{avg\_1h}$**: 최근 1시간 평균 유입량 (비정상 스파이크 필터링).
+- **$\lambda_{peak\_24h}$**: 최근 24시간 중 최대 유입량 (최악의 상황 가정).
+
+### 2.3. Safe Window 추천 로직
+- SQLite의 과거 데이터를 시간대별로 그룹화하여 **평균 TPS가 가장 낮은 황금 시간대** 식별.
+- 사용자에게 "내일 오전 3시~4시 사이에 배포하는 것이 80% 더 안전합니다" 등의 가이드 제공.
+
+## 3. 리스크 평가 단계 (Updated)
+1. **정적 분석**: DDL 유형 및 재작성($F_{rewrite}$) 확인.
+2. **동적 지표 확보**: SQLite에서 최근 24시간치 트래픽 데이터 로드.
+3. **가중치 계산**: 현재 상황과 베이스라인을 대조하여 최종 유입량($\lambda$) 확정.
+4. **점수 산출**: 기존 큐잉 수식 적용하여 $RiskScore$ 도출.
+5. **컨텍스트 생성**: 리스크 점수의 근거(평소 대비 트래픽 등)를 리포트에 포함.
 
 ## 4. 향후 과제
-- 중앙값(Median) 기반의 트래픽 밀도 분석을 통한 **Safe Window(안전 배포 시간대)** 추천 로직 추가.
-- $Disk_{IO}$, $\mu_{max}$ 등 인프라 상수의 실측 데이터 기반 자동 보정 로직.
+- 머신러닝 기반의 트래픽 예측(Prediction) 엔진 도입 검토.
+- 테이블별 상세 쿼리 패턴(Read vs Write) 분석을 통한 정교한 락 경합 예측.

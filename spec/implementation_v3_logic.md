@@ -1,51 +1,47 @@
-# 🛡️ MigraGuard v3.0 상세 로직 명세서 (Logic Specification)
+# MigraGuard v3.1 상세 로직 명세서 (Agent-CLI 분리 모델)
 
-본 문서는 MigraGuard v3.0의 각 로직에 고유 번호(Logic ID)를 부여하여 관리합니다.
-
----
-
-## 🚀 Phase 0: CLI 진입점 및 오케스트레이션
-**파일:** `cmd/migraguard/analyze.go`
-
-- **[L01] SQL 로드**: 마이그레이션 SQL 파일을 텍스트로 읽어들임.
-- **[L02] 정적 분석 호출**: `parser.ParseSQL()`을 통한 DDL 특성 파악.
-- **[L03] DB 동적 지표 수집**: `db.PostgresAdapter`를 통한 실시간 부하 데이터 획득.
-- **[L04] 리스크 계산**: `engine.AnalyzeRisk()`를 통한 정량적 위험도 산출.
-- **[L05] 최종 판단**: 산출된 결과를 바탕으로 배포 승인/거부 결정.
+본 문서는 에이전트가 상시 수집한 데이터를 바탕으로 CLI가 분석을 수행하는 v3.1 로직을 정의합니다.
 
 ---
 
-## 🔍 Phase 1: 정적 분석 (Static AST Analysis)
-**파일:** `internal/parser/ast.go`
+## 🛰️ Phase A: Agent - 상시 지표 수집 (Continuous Collection)
+**파일:** `cmd/migraguard/agent.go`, `internal/db/collector.go`
 
-- **[L11] AST 변환**: SQL 문장을 PostgreSQL 파서를 통해 트리 구조로 변환.
-- **[L12] 작업 식별**: DDL 유형 및 테이블 재작성($F_{rewrite}$) 필요성 판단.
-
----
-
-## 📊 Phase 2: 실시간 동적 지표 수집
-**파일:** `internal/db/collector.go`
-
-- **[L21] 테이블 크기 ($S_{table}$)**: 대상 테이블의 물리적 용량 측정.
-- **[L22] 트래픽 처리량 ($\lambda$)**: 시스템의 초당 트랜잭션 수(TPS) 측정.
-- **[L23] 활성 커넥션 ($C_{active}$)**: 현재 DB를 점유 중인 세션 수 측정.
-- **[L24] 복제 지연 ($Lag_{repl}$)**: 마스터-슬레이브 간 동기화 지연 시간 측정.
+- **[L-A01] 에이전트 초기화**: DB 연결 및 SQLite 저장소 준비.
+- **[L-A02] 주기적 스냅샷 캡처**: 정해진 주기(1s~1m)마다 `pg_stat_statements` 데이터를 SQLite에 `INSERT`.
+- **[L-A03] 데이터 정제 (Cleanup)**: 매시간 단위로 설정된 보존 기간(Retention)을 초과한 데이터 삭제.
+- **[L-A04] 헬스체크**: 수집 상태를 로그로 기록하여 정상 작동 여부 모니터링.
 
 ---
 
-## 🧠 Phase 3: 리스크 엔진 (v3.0 Queuing Model)
-**파일:** `internal/engine/risk.go`
+## 🔍 Phase B: CLI - 리스크 분석 (On-Demand Analysis)
+**파일:** `cmd/migraguard/analyze.go`, `internal/engine/risk.go`
 
-- **[L31] DDL 시간 추정 ($T_{ddl}$)**: $S_{table} / Disk\_IO$ 기반 물리 작업 시간 예측.
-- **[L32] 블로킹 시간 산출 ($T_{block}$)**: $T_{p99} + T_{ddl} + Lag_{repl}$ 기반 서비스 영향 시간 예측.
-- **[L33] 큐 스파이크 산출 ($C_{peak}$)**: $C_{active} + (\lambda \times T_{block})$ 기반 예상 커넥션 부하 예측.
-- **[L34] 회복 시간 산출 ($T_{rec}$)**: $(C_{peak} - C_{max}) / (\mu_{max} - \lambda)$ 기반 정상화 시간 예측.
-- **[L35] 위험도 점수 산출**: $(C_{peak} / C_{max}) \times 100$ 기반 최종 점수 산출.
+- **[L-B01] SQL 로드 및 파싱**: 사용자가 제공한 DDL 파싱 및 대상 테이블($T_{target}$) 추출.
+- **[L-B02] 시계열 지표 쿼리**: **v3.1 핵심.**
+  - SQLite에서 $T_{target}$에 대한 최근 1시간 TPS 데이터 조회.
+  - `avg()`, `max()` 쿼리를 통해 베이스라인($\lambda_{baseline}$) 산출.
+- **[L-B03] 리스크 점수 계산**:
+  - `AnalyzeRisk()` 함수에서 `time.Sleep` 없이 즉각적으로 리스크 점수($C_{peak} / C_{max}$) 도출.
+  - 만약 SQLite에 데이터가 부족할 경우(신규 에이전트), 경고와 함께 최소 수집 대기 안내.
+- **[L-B04] 리포팅**: 현재 트래픽 상황과 대조하여 Safe Window(안전 배포 시간대) 추천 포함.
 
 ---
 
-## 🚦 Phase 4: 리포팅 및 게이트키핑
-**파일:** `cmd/migraguard/analyze.go` & `internal/reporter/console.go`
+## 🧠 Phase C: 리스크 엔진 수식 (v3.1 Baseline Model)
 
-- **[L41] 결과 리포팅**: 산출된 수치를 시각화하여 터미널에 출력.
-- **[L42] 프로세스 제어**: 위험 수준에 따라 Exit Code 0 또는 1 반환.
+**기존 수식:** $C_{peak} = C_{active} + (\lambda_{delta} \times T_{block})$
+
+**v3.1 개선 수식:**
+- **Weighted TPS ($\lambda_{final}$)**:
+  $$\lambda_{final} = (w_1 \times \lambda_{current}) + (w_2 \times \lambda_{avg\_1h}) + (w_3 \times \lambda_{peak\_24h})$$
+  *(가중치는 기본적으로 실시간 데이터에 높게 부여하지만, 전체적인 트래픽 추세를 반영함)*
+
+- **Safe Window Recommendation**:
+  - 하루 24시간 중 $\lambda_{avg}$가 가장 낮은 1시간 구간을 식별하여 사용자에게 추천.
+
+---
+
+## 🚦 Phase D: 게이트키핑 및 리포팅
+- **[L-D01] 결과 시각화**: 현재 리스크 수준과 함께 "최근 24시간 중 트래픽이 높은 시점입니다" 등의 컨텍스트 제공.
+- **[L-D02] CI/CD 통합**: PR 코멘트에 트래픽 추이 차트(ASCII 또는 Markdown) 포함 시도.

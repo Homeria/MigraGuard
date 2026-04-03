@@ -1,65 +1,42 @@
-# MigraGuard 기술 사양 및 아키텍처 (상세)
+# MigraGuard v3.1 기술 사양 및 아키텍처 (Agent-CLI 분리)
 
-## 1. 시스템 동작 흐름 (Core Engine Flow)
-1. **백그라운드 수집 (Background Collection):**
-   - 고루틴 기반 데몬이 `robfig/cron` 또는 Ticker를 사용하여 주기적으로 운영 DB의 `pg_stat_statements` 스냅샷을 캡처합니다.
-   - 캡처된 데이터는 `internal/db/workload.go`를 통해 로컬 SQLite 저장소에 누적됩니다.
-2. **분석 단계 (Analyze Phase):**
-   - 사용자가 `analyze` 명령으로 마이그레이션 SQL을 입력합니다.
-   - `internal/parser/ast.go`가 SQL을 AST로 변환하여 타겟 테이블을 식별하고, 해당 테이블에 필요한 Lock Level을 판별합니다.
-3. **위험도 평가 (Risk Evaluation):**
-   - SQLite에 저장된 시계열 트래픽 데이터를 분석하여, 해당 테이블의 평소 트래픽 밀도를 파악합니다.
-   - 중앙값(Median) 연산을 통해 '최적의 안전 배포 시간대(Safe Window)'를 추천합니다.
-   - 현재 트래픽이 임계치를 초과하거나 락 레벨이 높은 경우 `Risk Score`를 산출합니다.
-4. **결과 리포팅 및 게이트키핑:**
-   - CLI 결과 출력 및 GitHub PR 봇 연동을 통한 마크다운 코멘트 작성.
-   - 위험 수준이 'Danger'인 경우 프로세스를 중단시켜 배포를 차단합니다.
+## 1. 이중화 아키텍처 (Dual-Process Architecture)
 
-## 2. 주요 모듈 및 기술 상세
-- **데이터 저장소 (Storage):** 외부 의존성을 줄이기 위해 로컬 SQLite(`mattn/go-sqlite3`)를 채택하여 WAL 모드로 시계열 데이터를 관리합니다.
-- **파서 (Parser):** PostgreSQL 정식 C 파서를 포팅한 `pg_query_go`를 사용하여 최신 PostgreSQL 문법을 완벽히 지원합니다.
-- **동시성 모델:** Go의 `channel`과 `goroutine`을 활용하여 메인 프로세스의 블로킹 없이 백그라운드 수집을 수행합니다.
+MigraGuard는 데이터 수집의 지속성과 분석의 즉각성을 보장하기 위해 두 개의 실행 모드로 분리됩니다.
 
-## 3. MigraGuard v3.0 정적/동적 통합 위험도 산출 수학적 모델
+### 1.1. MigraGuard Agent (Background Service)
+- **역할:** 운영 데이터베이스의 메트릭을 중단 없이 수집하여 시계열 저장소를 유지함.
+- **동작 방식:**
+  - 1분(또는 설정된 주기)마다 `pg_stat_statements`를 조회하여 누적 지표를 캡처.
+  - SQLite `workload_snapshots` 테이블에 저장.
+  - 데이터 보존(Retention): 설정된 기간(예: 7일)이 지난 지표는 자동 삭제하여 저장소 크기 관리.
+- **배포:** 운영 DB 환경에 컨테이너로 상시 가동.
 
-본 섹션은 DDL 실행 시 발생할 수 있는 대기행렬(Queue)의 급격한 증가와 이로 인한 연쇄 장애(Cascading Failure)를 예측하기 위한 정량적 분석 모델을 기술합니다.
+### 1.2. MigraGuard Analyze (Foreground CLI)
+- **역할:** 개발자의 마이그레이션 SQL을 입력받아 즉각적으로 위험도를 분석함.
+- **동작 방식:**
+  - `migraguard.db` 파일에 직접 접근하거나(Shared Volume), 추후 Agent API를 통해 데이터를 조회.
+  - AST 파싱 결과로 나온 타겟 테이블의 **최근 1시간 평균 TPS, 최근 24시간 최대 TPS** 등을 즉시 산출.
+  - `time.Sleep` 없이 즉각적인 리스크 리포트 생성.
+- **배포:** CI/CD 파이프라인(GitHub Actions 등)의 단계로 실행.
 
-### 3.1. 위험도 산출 공식 (5단계)
+## 2. 데이터 공유 전략 (Data Sharing)
 
-#### Step 1. DDL 물리적 소요 시간 추정 ($T_{ddl}$)
-$$T_{ddl} = \left( F_{rewrite} \times \frac{S_{table}}{Disk_{IO}} \right) + \left( (1 - F_{rewrite}) \times T_{meta} \right)$$
-*   **설명**: AST 파싱 결과를 바탕으로 테이블 재기록(Table Rewrite) 발생 여부를 판단합니다. 발생 시 물리적 디스크 I/O 처리 시간을 계산하며, 단순 메타데이터 변경 시에는 고정된 상수 시간을 부여합니다.
-
-#### Step 2. 총 블로킹 시간 산출 ($T_{block}$)
-$$T_{block} = T_{p99} + T_{ddl} + Lag_{repl}$$
-*   **설명**: 락 경합으로 인해 후행 쿼리가 차단되는 총 시간을 의미합니다. 상위 1%($P99$) 느린 쿼리의 대기 시간, DDL 실행 시간, 그리고 복제 지연(Replication Lag) 시간을 합산하여 산출합니다.
-
-#### Step 3. 락 해제 직후 큐 스파이크량 산출 ($C_{peak}$)
-$$C_{peak} = C_{active} + (\lambda \times T_{block})$$
-*   **설명**: 락이 유지되는($T_{block}$) 동안 처리되지 못하고 대기열에 누적된 최대 커넥션 요구량입니다.
-
-#### Step 4. 시스템 회복 소요 시간 및 타임아웃 지연 시간 산출 ($T_{rec}, T_{delay\_max}$)
-$$T_{rec} = \max\left( 0, \frac{C_{peak} - C_{max}}{\mu_{max} - \lambda} \right)$$
-$$T_{delay\_max} = T_{block} + T_{rec}$$
-*   **설명**: 축적된 큐 스파이크($C_{peak}$)를 DB의 최대 처리량($\mu_{max}$)으로 해소하는 데 걸리는 시간입니다. 만약 유입량($\lambda$)이 최대 처리량보다 클 경우($\lambda \geq \mu_{max}$), 시스템은 영구적 장애 상태로 간주됩니다.
-
-#### Step 5. 최종 커넥션 고갈 위험도 ($RiskScore$)
-$$RiskScore(\%) = \left( \frac{C_{peak}}{C_{max}} \right) \times 100$$
-*   **설명**: 시스템이 수용 가능한 최대 커넥션($C_{max}$) 대비 예측된 큐 스파이크량의 비율을 통해 서비스 불능(OOM, Connection Exhaustion) 가능성을 점수화합니다.
-
-### 3.2. 시스템 변수 정의 (Variable Definitions)
-
-| 변수 | 명칭 | 설명 | 수집 출처/분류 |
+| 방식 | 설명 | 장점 | 단점 |
 | :--- | :--- | :--- | :--- |
-| $L_{type}$ | 락 강도 계수 | DDL이 요구하는 락의 종류 (AccessExclusiveLock 등) | `pg_query_go` (정적 파싱) |
-| $F_{rewrite}$ | 테이블 재기록 플래그 | DDL 실행 시 테이블 풀 스캔 및 복사 발생 여부 (1 또는 0) | `pg_query_go` (정적 파싱) |
-| $S_{table}$ | 타겟 테이블 물리 크기 | 타겟 테이블의 현재 디스크 점유 용량 (Bytes) | `pg_relation_size()` (동적 DB 상태) |
-| $Disk_{IO}$ | DB 디스크 I/O 성능 | 스토리지의 초당 처리 속도 (Bytes/sec) | 인프라 설정값 (상수) |
-| $T_{meta}$ | 메타데이터 처리 시간 | 단순 카탈로그 업데이트에 소요되는 평균 시간 | 실측 경험치 (상수) |
-| $T_{p99}$ | P99 쿼리 실행 시간 | 타겟 테이블에 실행 중인 상위 1%의 꼬리 지연 시간 | `pg_stat_statements` (동적 트래픽) |
-| $Lag_{repl}$ | 복제 지연 시간 | Master-Replica 간 WAL 동기화 지연 시간 | `pg_stat_replication` (동적 DB 상태) |
-| $\lambda$ | 쿼리 유입량 (TPS) | 초당 타겟 테이블에 들어오는 평균 쿼리 수 | `pg_stat_statements` (동적 트래픽) |
-| $\mu_{max}$ | 최대 초당 처리량 | DB가 에러 없이 처리 가능한 초당 최대 쿼리 수 | 인프라 설정 및 부하테스트 (상수) |
-| $C_{max}$ | 최대 커넥션 풀 크기 | PgBouncer 등에 설정된 Max Connection 제한치 | 환경 변수 (상수) |
-| $C_{active}$ | 현재 활성 커넥션 수 | 타겟 테이블을 점유/대기 중인 트랜잭션 수 | `pg_stat_activity` (동적 트래픽) |
-| $T_{timeout}$ | API 타임아웃 임계치 | 백엔드 서버에 설정된 API 강제 종료 시간 | 애플리케이션 환경 변수 (상수) |
+| **Docker Volume** | 동일 호스트 내에서 SQLite 파일을 공유 폴더에 저장 | 구현이 매우 단순하고 빠름 | 물리적으로 떨어진 서버 간 공유 어려움 |
+| **Sidecar Pattern** | K8s 환경에서 동일 Pod 내에 Agent와 CLI를 배치 | 컨테이너 간 리소스 공유 최적화 | CI/CD 환경에 따라 설정 복잡 |
+| **Agent API (v4.0 예정)** | Agent가 HTTP 서버를 띄워 CLI에 JSON으로 지표 전달 | 네트워크 격리 환경에서도 사용 가능 | API 서버 및 보안 구현 필요 |
+
+## 3. 리스크 분석 로직의 고도화 (v3.1)
+
+- **As-Is (v3.0):** 3초간의 실시간 TPS만 사용 ($\lambda_{3s}$).
+- **To-Be (v3.1):**
+  - **$\lambda_{avg}$ (Average Load):** 최근 1시간 평균 유입량.
+  - **$\lambda_{peak}$ (Peak Load):** 최근 24시간 중 피크 타임 유입량.
+  - **$\lambda_{curr}$ (Current Load):** 가장 최근 수집된 실시간 유입량.
+  - **최종 분석:** $RiskScore$ 계산 시 위 세 가지 지표를 가중치로 결합하여 "지금 배포하는 것이 안전한가?" 뿐만 아니라 "언제 배포하는 것이 가장 안전한가?"를 판단.
+
+## 4. 데이터 보존 정책 (Retention Policy)
+- **SQLite VACUUM:** 주기적인 용량 최적화.
+- **Purge Query:** `DELETE FROM workload_snapshots WHERE timestamp < datetime('now', '-7 days')`.

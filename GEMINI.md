@@ -1,33 +1,21 @@
-# 🛡️ MigraGuard 프로젝트 진행 상황 (Session Handover)
-
-본 문서는 다른 세션에서 작업을 이어받기 위한 가이드 및 현재 상태 기록입니다.
+# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.1 아키텍처 대전환)
 
 ## 📅 마지막 업데이트: 2026-04-03
-- **현재 상태:** **Phase 1~4 구현 완료 (v3.0 모델 통합)**
-- **핵심 성과:** 대기행렬 이론 기반의 MigraGuard v3.0 위험도 산출 모델을 CLI 게이트키퍼에 성공적으로 통합.
+- **현재 상태:** **v3.1 에이전트-CLI 분리 모델로의 아키텍처 재설계 및 명세서 수립 완료**
+- **핵심 변경 사항:** 분석 시점에만 임시로 수집하던 방식(v3.0)에서, 상시 수집 에이전트(Agent)와 즉각 분석 도구(CLI)가 공존하는 구조로 전환.
 
-## ✅ 지금까지 완료된 작업
-1. **Core Parser (Phase 1) 고도화**:
-   - SQL AST 분석 및 테이블 재기록($F_{rewrite}$) 자동 판단 로직 구현.
-2. **Data Foundation (Phase 2) 고도화**:
-   - PostgreSQL 실시간 동적 지표($S_{table}$, $Lag_{repl}$, $C_{active}$, $\lambda$) 수집 체계 구축.
-   - SQLite `table_metrics` 시계열 저장소 확장 및 백그라운드 수집 엔진 통합.
-3. **Risk Engine (Phase 3) 구현**:
-   - `internal/engine/risk.go`: v3.0 수학적 모델 기반 정량적 리스크 점수 및 회복 시간($T_{rec}$) 산출 로직 완성.
-4. **Reporter & Gatekeeper (Phase 4) 구현**:
-   - `cmd/migraguard/analyze.go`: v3.0 리포팅 및 `Exit Code 1` 기반 자동 게이트키핑 통합 완료.
+## 🛠️ v3.1 전환 로드맵
+1. **[Phase 1] 커맨드 분리**: `cmd/migraguard/agent.go`와 `analyze.go`로 명령 체계 이원화.
+2. **[Phase 2] 에이전트 고도화**: `Collector`의 상시 실행 안정성 확보 및 데이터 보존 정책(Retention) 구현.
+3. **[Phase 3] 리스크 엔진 개편**: 3초 대기(`time.Sleep`) 로직을 제거하고 SQLite 시계열 쿼리(AVG, MAX) 기반으로 변경.
+4. **[Phase 4] 인프라 정의**: Docker Compose를 이용한 Agent(상시)와 CLI(트리거) 간의 데이터 공유(Volume) 가이드라인 작성.
 
-## 🛠️ 기술 사양 (v3.0 핵심)
-- **위험도 산출 공식**:
-  $$RiskScore(\%) = \left( \frac{C_{peak}}{C_{max}} \right) \times 100$$
-  where $C_{peak} = C_{active} + (\lambda \times T_{block})$
-- **주요 지표**: $F_{rewrite}$, $S_{table}$, $Lag_{repl}$, $T_{p99}$, $\lambda$, $\mu_{max}$, $C_{max}$.
+## ✅ 기존 완료 항목 (유지 및 재활용)
+- `internal/parser/ast.go`: SQL 파싱 및 락 레벨 식별 로직은 그대로 유지.
+- `internal/db/activity.go`: PostgreSQL 메트릭 수집 기본 로직 유지.
+- `internal/engine/risk.go`: 핵심 큐잉 모델 수식 유지 (입력값 $\lambda$의 출처만 변경).
 
 ## 🚀 향후 과제 (Next Steps)
-1. **설계 상수 외부화**: $Disk_{IO}$, $\mu_{max}$ 등을 `migraguard.yaml` 설정 파일에서 관리하도록 개선.
-2. **테스트 강화**: 실제 운영 워크로드를 모사한 부하 테스트 및 위험도 점수 검증 로직 추가.
-3. **Markdown 리포터**: GitHub Action 등 CI 환경에서 PR 코멘트로 분석 결과를 남기는 기능 개발.
-
----
-**세션 종료:** 모든 핵심 기능 구현과 문서 업데이트가 완료되었습니다. 수고하셨습니다!
----
+- `migraguard agent` 커맨드 구현 및 백그라운드 무한 루프 로직 작성.
+- SQLite 시계열 데이터 관리용 쿼리 최적화.
+- Docker 볼륨 공유를 통한 테스트 환경 구축.
