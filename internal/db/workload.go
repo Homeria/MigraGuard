@@ -98,29 +98,29 @@ func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName 
 
 	metrics := &TableDynamicMetrics{TableName: tableName}
 
-	// 1. Get Table Size (S_table)
+	// [L21] 테이블 크기 ($S_table): Get Table Size
 	// pg_total_relation_size()를 사용하여 테이블의 물리적 크기를 가져옵니다.
 	err := a.pool.QueryRow(ctx, "SELECT pg_total_relation_size($1)", tableName).Scan(&metrics.TableSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get table size: %w", err)
 	}
 
-	// 2. Get Replication Lag (Lag_repl)
+	// [L24] 복제 지연 ($Lag_repl): Get Replication Lag
 	// pg_stat_replication에서 현재 복제 지연 시간을 초 단위로 가져옵니다.
 	// 지연이 없거나 마스터 단독 환경이면 0을 반환합니다.
 	lagQuery := `
-		SELECT COALESCE(EXTRACT(EPOCH FROM (now() - reply_time)), 0) 
-		FROM pg_stat_replication 
+		SELECT COALESCE(EXTRACT(EPOCH FROM (now() - reply_time)), 0)
+		FROM pg_stat_replication
 		ORDER BY reply_time ASC LIMIT 1;
 	`
 	_ = a.pool.QueryRow(ctx, lagQuery).Scan(&metrics.ReplicationLag)
 
-	// 3. Get Active Connections (C_active)
+	// [L23] 활성 커넥션 ($C_active): Get Active Connections
 	// 현재 해당 테이블을 쿼리 중이거나 락을 대기 중인 활성 세션 수를 조회합니다.
 	activeQuery := `
-		SELECT count(*) 
-		FROM pg_stat_activity 
-		WHERE query LIKE '%' || $1 || '%' 
+		SELECT count(*)
+		FROM pg_stat_activity
+		WHERE query LIKE '%' || $1 || '%'
 		AND state = 'active'
 		AND pid <> pg_backend_pid();
 	`
@@ -129,7 +129,7 @@ func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName 
 		return nil, fmt.Errorf("failed to get active connections: %w", err)
 	}
 
-	// 4. Get P99 Time (T_p99) and TPS (Lambda)
+	// [L22] 트래픽 처리량 ($\lambda$): Get P99 Time (T_p99) and TPS (Lambda)
 	// pg_stat_statements를 활용하여 테이블 대상 쿼리의 P99 지연시간과 TPS를 추정합니다.
 	statsQuery := `
 		SELECT 
@@ -138,11 +138,9 @@ func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName 
 		FROM pg_stat_statements
 		WHERE query LIKE '%' || $1 || '%';
 	`
-	// 참고: PERCENTILE_CONT는 pg_stat_statements의 컬럼 데이터 기반 추정치입니다.
 	_ = a.pool.QueryRow(ctx, statsQuery, tableName).Scan(&metrics.P99Time, &metrics.TPS)
 
-	return metrics, nil
-}
+	return metrics, nil}
 
 // GetTableStats retrieves traffic statistics for a specific table.
 // 특정 테이블에 대한 트래픽 통계를 조회합니다.

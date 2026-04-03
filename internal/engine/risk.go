@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/Homeria/MigraGuard/internal/db"
 	"github.com/Homeria/MigraGuard/internal/parser"
@@ -73,7 +72,7 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 
 	report := &RiskAnalysisReport{}
 
-	// Step 1: DDL 물리적 소요 시간 추정 (T_ddl)
+	// [L31] Step 1: DDL 물리적 소요 시간 추정 (T_ddl)
 	// F_rewrite 플래그와 테이블 크기(S_table)를 사용하여 계산합니다.
 	if analysis.RewriteRequired {
 		report.EstimatedDDLTime = (float64(metrics.TableSize) / float64(e.constants.DiskIO)) * 1000.0
@@ -81,17 +80,17 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 		report.EstimatedDDLTime = e.constants.TMeta
 	}
 
-	// Step 2: 총 블로킹 시간 산출 (T_block)
+	// [L32] Step 2: 총 블로킹 시간 산출 (T_block)
 	// T_block = T_p99 + T_ddl + Lag_repl
 	report.BlockingTime = metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)
 
-	// Step 3: 락 해제 직후 큐 스파이크량 산출 (C_peak)
+	// [L33] Step 3: 락 해제 직후 큐 스파이크량 산출 (C_peak)
 	// C_peak = C_active + (Lambda * T_block)
 	// Lambda (TPS)를 ms 단위로 변환하여 계산
 	lambdaPerMs := metrics.TPS / 1000.0
 	report.PeakConnections = metrics.ActiveConnections + int(lambdaPerMs * report.BlockingTime)
 
-	// Step 4: 시스템 회복 소요 시간 산출 (T_rec)
+	// [L34] Step 4: 시스템 회복 소요 시간 산출 (T_rec)
 	// T_rec = (C_peak - C_max) / (Mu_max - Lambda)
 	if metrics.TPS >= e.constants.MuMax {
 		report.PermanentFailure = true
@@ -106,7 +105,7 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 		}
 	}
 
-	// Step 5: 최종 커넥션 고갈 위험도 (RiskScore)
+	// [L35] Step 5: 최종 커넥션 고갈 위험도 (RiskScore)
 	// RiskScore = (C_peak / C_max) * 100
 	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
 

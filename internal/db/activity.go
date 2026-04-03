@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // SQLiteAdapter manages the local time-series storage for workload data.
@@ -16,10 +16,8 @@ type SQLiteAdapter struct {
 // NewSQLiteAdapter creates a new SQLiteAdapter and initializes the database.
 // 새로운 SQLiteAdapter를 생성하고 데이터베이스를 초기화합니다.
 func NewSQLiteAdapter(path string) (*SQLiteAdapter, error) {
-	// Open SQLite database with WAL mode for better concurrency
-	// 동시성 성능 향상을 위해 WAL 모드를 사용하여 SQLite 데이터베이스를 엽니다.
-	dsn := fmt.Sprintf("%s?_journal_mode=WAL", path)
-	db, err := sql.Open("sqlite3", dsn)
+	// Open SQLite database
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
@@ -166,37 +164,38 @@ type TableStats struct {
 	SnapshotCnt int
 }
 
-// GetHistoricalStats analyzes workload snapshots to provide traffic statistics for a specific table.
-// 워크로드 스냅샷을 분석하여 특정 테이블에 대한 트래픽 통계를 제공합니다.
-func (a *SQLiteAdapter) GetHistoricalStats(tableName string) (*TableStats, error) {
-	// Simple pattern matching for the table name in queries.
-	// 쿼리 내에서 테이블명을 포함하는 데이터를 조회합니다.
+// GetRecentTPSDelta calculates the TPS by comparing the two most recent snapshots for a table.
+// [L22] 최근 두 스냅샷의 누적 호출 수 차이(Delta)를 이용해 실제 초당 트랜잭션 수(TPS)를 계산합니다.
+func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 	query := `
+		WITH recent_snapshots AS (
+			SELECT timestamp, SUM(calls) as total_calls
+			FROM workload_snapshots
+			WHERE query LIKE ?
+			GROUP BY timestamp
+			ORDER BY timestamp DESC
+			LIMIT 2
+		)
 		SELECT 
-			AVG(calls) as avg_calls, 
-			MAX(calls) as max_calls, 
-			SUM(total_time) as total_time,
-			COUNT(*) as snapshot_cnt
-		FROM workload_snapshots
-		WHERE query LIKE ?;
+			(MAX(total_calls) - MIN(total_calls)) / 
+			(MAX(strftime('%s', timestamp)) - MIN(strftime('%s', timestamp))) as tps
+		FROM recent_snapshots;
 	`
 	
 	pattern := "%" + tableName + "%"
-	row := a.db.QueryRow(query, pattern)
-
-	var stats TableStats
-	stats.TableName = tableName
-	
-	err := row.Scan(&stats.AvgCalls, &stats.MaxCalls, &stats.TotalTime, &stats.SnapshotCnt)
+	var tps sql.NullFloat64
+	err := a.db.QueryRow(query, pattern).Scan(&tps)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return &stats, nil
-		}
-		return nil, fmt.Errorf("failed to aggregate historical stats: %w", err)
+		return 0, fmt.Errorf("failed to calculate tps delta: %w", err)
 	}
 
-	return &stats, nil
+	if !tps.Valid {
+		return 0, nil // 데이터가 부족한 경우 0 반환
+	}
+
+	return tps.Float64, nil
 }
+
 
 // Close closes the SQLite database connection.
 // SQLite 데이터베이스 연결을 닫습니다.

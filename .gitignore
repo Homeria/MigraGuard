@@ -40,3 +40,5 @@ vendor/
 
 # Project specific docs (already ignored)
 spec/total_spec.pdf
+
+logic_diagram

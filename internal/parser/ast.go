@@ -33,19 +33,28 @@ type AnalysisResult struct {
 
 // ParseSQL analyzes the provided SQL string and returns a slice of AnalysisResult.
 func ParseSQL(sql string) ([]AnalysisResult, error) {
+
+	// [L11] AST 변환: Parse SQL into AST
+	// pg_query 라이브러리를 사용하여 SQL 문자열을 AST로 변환.
 	result, err := pg_query.Parse(sql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SQL: %v", err)
 	}
 
+	// AST로 변환된 결과에서 각 노드를 순회하며 DDL 작업을 식별하고 분석 결과를 수집
+	// Stmts : SQL 문장(Statement)들의 리스트, 작업 유형과 영향을 받는 테이블/컬럼 정보를 추출하여 AnalysisResult 구조체에 저장
+	// handleNode : 노드 유형 확인 (ALTER TABLE, CREATE TABLE, DROP TABLE, CREATE INDEX 등) 및 분석 결과 생성
+	//
 	var results []AnalysisResult
 	for _, stmt := range result.Stmts {
+		// [L12] 작업 식별: Identify DDL operations
 		res := handleNode(stmt.Stmt)
 		if res != nil {
 			results = append(results, *res)
 		}
 	}
 
+	// AST 분석 결과 반환
 	return results, nil
 }
 
@@ -82,9 +91,9 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 
 	if stmt := node.GetCreateStmt(); stmt != nil {
 		res := &AnalysisResult{
-			Operation: "CREATE",
-			TableName: stmt.Relation.Relname,
-			LockLevel: AccessExclusiveLock,
+			Operation:       "CREATE",
+			TableName:       stmt.Relation.Relname,
+			LockLevel:       AccessExclusiveLock,
 			RewriteRequired: false, // 신규 테이블 생성은 기존 데이터 재기록이 없음
 		}
 		// CREATE TABLE의 컬럼 정의 추출

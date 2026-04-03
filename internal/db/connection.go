@@ -37,24 +37,31 @@ func NewPostgresAdapter(url string) *PostgresAdapter {
 // Connect establishes a connection pool to the PostgreSQL server.
 // PostgreSQL 서버에 대한 연결 풀을 생성합니다.
 func (a *PostgresAdapter) Connect(ctx context.Context) error {
+
+	// 현재 설정값 불러오기
 	config, err := pgxpool.ParseConfig(a.url)
 	if err != nil {
 		return fmt.Errorf("failed to parse connection URL: %w", err)
 	}
 
-	// Set default pool settings
-	// 기본 풀 설정을 구성합니다.
+	// TODO: Configurable connection pool settings (migraguard.yaml)
+
+	// MaxConns : MigraGuard에서 동시에 DB에 던질 수 있는 최대 연결(세션) 수
 	config.MaxConns = 10
+
+	// MinConns : 연결 풀에서 유지할 최소 연결 수
 	config.MinConns = 2
+
+	// MaxConnLifetime : 연결 풀에서 개별 연결이 유지될 수 있는 최대 시간
 	config.MaxConnLifetime = time.Hour
 
+	// 수정한 config 값을 시스템에 주입하여 connection pool 생성
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	// Ping the database to verify the connection
-	// 연결 확인을 위해 데이터베이스에 핑을 보냅니다.
+	// 연결 확인을 위해 DB에 핑 보내기
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return fmt.Errorf("failed to ping database: %w", err)
