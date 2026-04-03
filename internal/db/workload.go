@@ -21,6 +21,17 @@ type WorkloadSnapshot struct {
 	SharedBlksRead int64     `json:"shared_blks_read"`
 }
 
+// TableDynamicMetrics represents dynamic metrics of a table for Risk Model v3.0.
+// 위험도 모델 v3.0을 위한 테이블의 동적 지표를 나타냅니다.
+type TableDynamicMetrics struct {
+	TableName         string  `json:"table_name"`
+	TableSize         int64   `json:"table_size"`          // S_table
+	ReplicationLag    float64 `json:"replication_lag"`    // Lag_repl (seconds)
+	ActiveConnections int     `json:"active_connections"` // C_active
+	P99Time           float64 `json:"p99_time"`           // T_p99 (ms)
+	TPS               float64 `json:"tps"`                // Lambda (queries per second)
+}
+
 // FetchWorkload retrieves the current snapshot from pg_stat_statements.
 // pg_stat_statements에서 현재 워크로드 스냅샷을 가져옵니다.
 func (a *PostgresAdapter) FetchWorkload(ctx context.Context) ([]WorkloadSnapshot, error) {
@@ -76,6 +87,61 @@ func (a *PostgresAdapter) FetchWorkload(ctx context.Context) ([]WorkloadSnapshot
 	}
 
 	return snapshots, nil
+}
+
+// GetTableDynamicMetrics collects all dynamic metrics required for v3.0 Risk Score calculation.
+// 위험도 점수 산출(v3.0)에 필요한 모든 동적 지표를 수집합니다.
+func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName string) (*TableDynamicMetrics, error) {
+	if a.pool == nil {
+		return nil, fmt.Errorf("database connection is not established")
+	}
+
+	metrics := &TableDynamicMetrics{TableName: tableName}
+
+	// 1. Get Table Size (S_table)
+	// pg_total_relation_size()를 사용하여 테이블의 물리적 크기를 가져옵니다.
+	err := a.pool.QueryRow(ctx, "SELECT pg_total_relation_size($1)", tableName).Scan(&metrics.TableSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get table size: %w", err)
+	}
+
+	// 2. Get Replication Lag (Lag_repl)
+	// pg_stat_replication에서 현재 복제 지연 시간을 초 단위로 가져옵니다.
+	// 지연이 없거나 마스터 단독 환경이면 0을 반환합니다.
+	lagQuery := `
+		SELECT COALESCE(EXTRACT(EPOCH FROM (now() - reply_time)), 0) 
+		FROM pg_stat_replication 
+		ORDER BY reply_time ASC LIMIT 1;
+	`
+	_ = a.pool.QueryRow(ctx, lagQuery).Scan(&metrics.ReplicationLag)
+
+	// 3. Get Active Connections (C_active)
+	// 현재 해당 테이블을 쿼리 중이거나 락을 대기 중인 활성 세션 수를 조회합니다.
+	activeQuery := `
+		SELECT count(*) 
+		FROM pg_stat_activity 
+		WHERE query LIKE '%' || $1 || '%' 
+		AND state = 'active'
+		AND pid <> pg_backend_pid();
+	`
+	err = a.pool.QueryRow(ctx, activeQuery, tableName).Scan(&metrics.ActiveConnections)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active connections: %w", err)
+	}
+
+	// 4. Get P99 Time (T_p99) and TPS (Lambda)
+	// pg_stat_statements를 활용하여 테이블 대상 쿼리의 P99 지연시간과 TPS를 추정합니다.
+	statsQuery := `
+		SELECT 
+			PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY max_exec_time) as p99_time,
+			SUM(calls) / GREATEST(EXTRACT(EPOCH FROM (now() - min(stats_reset))), 1) as tps
+		FROM pg_stat_statements
+		WHERE query LIKE '%' || $1 || '%';
+	`
+	// 참고: PERCENTILE_CONT는 pg_stat_statements의 컬럼 데이터 기반 추정치입니다.
+	_ = a.pool.QueryRow(ctx, statsQuery, tableName).Scan(&metrics.P99Time, &metrics.TPS)
+
+	return metrics, nil
 }
 
 // GetTableStats retrieves traffic statistics for a specific table.
