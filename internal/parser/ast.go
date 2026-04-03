@@ -22,11 +22,13 @@ const (
 )
 
 // AnalysisResult holds the result of the SQL static analysis.
+// SQL 정적 분석 결과를 보유하는 구조체입니다.
 type AnalysisResult struct {
-	TableName string
-	LockLevel LockLevel
-	Operation string   // 작업 유형: CREATE, ALTER, DROP 등
-	Columns   []string // 영향받는 컬럼 목록
+	TableName       string
+	LockLevel       LockLevel
+	Operation       string   // 작업 유형: CREATE, ALTER, DROP 등
+	Columns         []string // 영향받는 컬럼 목록
+	RewriteRequired bool     // F_rewrite: 테이블 재기록(Rewrite) 발생 여부
 }
 
 // ParseSQL analyzes the provided SQL string and returns a slice of AnalysisResult.
@@ -55,11 +57,23 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 			TableName: stmt.Relation.Relname,
 			LockLevel: AccessExclusiveLock,
 		}
-		// ALTER TABLE 명령들에서 컬럼명 추출 시도
+		// ALTER TABLE 명령들을 순회하며 컬럼 추출 및 Rewrite 여부 판별
 		for _, cmd := range stmt.Cmds {
 			if sub := cmd.GetAlterTableCmd(); sub != nil {
 				if sub.Name != "" {
 					res.Columns = append(res.Columns, sub.Name)
+				}
+
+				// PostgreSQL에서 테이블 재기록(F_rewrite)을 유발하는 주요 작업들
+				switch sub.Subtype {
+				case pg_query.AlterTableType_AT_AlterColumnType: // ALTER TYPE
+					res.RewriteRequired = true
+				case pg_query.AlterTableType_AT_SetNotNull: // SET NOT NULL (v12 미만은 재기록 발생)
+					res.RewriteRequired = true
+				case pg_query.AlterTableType_AT_AddColumn: // ADD COLUMN (DEFAULT가 있거나 VOLATILE일 때 발생할 수 있음)
+					if sub.Def != nil {
+						res.RewriteRequired = true
+					}
 				}
 			}
 		}
@@ -71,6 +85,7 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 			Operation: "CREATE",
 			TableName: stmt.Relation.Relname,
 			LockLevel: AccessExclusiveLock,
+			RewriteRequired: false, // 신규 테이블 생성은 기존 데이터 재기록이 없음
 		}
 		// CREATE TABLE의 컬럼 정의 추출
 		for _, el := range stmt.TableElts {
