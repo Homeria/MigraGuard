@@ -9,21 +9,36 @@ import (
 // Collector orchestrates the background data collection from Postgres to SQLite.
 // Postgres에서 SQLite로의 백그라운드 데이터 수집을 조율합니다.
 type Collector struct {
-	pg       *PostgresAdapter
-	sqlite   *SQLiteAdapter
-	interval time.Duration
-	stopChan chan struct{}
+	pg           *PostgresAdapter
+	sqlite       *SQLiteAdapter
+	interval     time.Duration
+	targetTables []string
+	stopChan     chan struct{}
 }
 
 // NewCollector creates a new Collector instance.
 // 새로운 Collector 인스턴스를 생성합니다.
 func NewCollector(pg *PostgresAdapter, sqlite *SQLiteAdapter, interval time.Duration) *Collector {
 	return &Collector{
-		pg:       pg,
-		sqlite:   sqlite,
-		interval: interval,
-		stopChan: make(chan struct{}),
+		pg:           pg,
+		sqlite:       sqlite,
+		interval:     interval,
+		targetTables: []string{}, // Initialize with an empty list
+		stopChan:     make(chan struct{}),
 	}
+}
+
+// AddTargetTable adds a table to the monitoring list for dynamic metrics collection.
+// 동적 지표 수집을 위해 모니터링 대상 테이블을 추가합니다.
+func (c *Collector) AddTargetTable(tableName string) {
+	// Check for duplicates
+	// 중복 여부를 확인합니다.
+	for _, t := range c.targetTables {
+		if t == tableName {
+			return
+		}
+	}
+	c.targetTables = append(c.targetTables, tableName)
 }
 
 // Start begins the background collection process in a separate goroutine.
@@ -57,24 +72,40 @@ func (c *Collector) Start(ctx context.Context) {
 // collect performs a single round of data fetching and saving.
 // 데이터 가져오기 및 저장의 단일 라운드를 수행합니다.
 func (c *Collector) collect(ctx context.Context) error {
-	// 1. Fetch from Postgres
+	// 1. Fetch from Postgres (Workload Snapshots)
 	// PostgreSQL에서 워크로드 스냅샷을 가져옵니다.
 	snapshots, err := c.pg.FetchWorkload(ctx)
 	if err != nil {
 		return err
 	}
 
-	if len(snapshots) == 0 {
-		return nil
+	if len(snapshots) > 0 {
+		// 2. Save Snapshots to SQLite
+		// 가져온 스냅샷을 로컬 SQLite에 저장합니다.
+		if err := c.sqlite.SaveSnapshots(snapshots); err != nil {
+			return err
+		}
+		log.Printf("Successfully collected %d workload snapshots", len(snapshots))
 	}
 
-	// 2. Save to SQLite
-	// 가져온 스냅샷을 로컬 SQLite에 저장합니다.
-	if err := c.sqlite.SaveSnapshots(snapshots); err != nil {
-		return err
+	// 3. Fetch Dynamic Metrics for Target Tables (v3.0 Model)
+	// 대상 테이블들에 대해 v3.0용 동적 지표를 수집합니다.
+	for _, table := range c.targetTables {
+		metrics, err := c.pg.GetTableDynamicMetrics(ctx, table)
+		if err != nil {
+			log.Printf("Error fetching metrics for table %s: %v", table, err)
+			continue
+		}
+
+		// 4. Save Table Metrics to SQLite
+		// 수집된 지표를 SQLite에 저장합니다.
+		if err := c.sqlite.SaveTableMetrics(metrics); err != nil {
+			log.Printf("Error saving metrics for table %s: %v", table, err)
+		} else {
+			log.Printf("Successfully collected dynamic metrics for table: %s", table)
+		}
 	}
 
-	log.Printf("Successfully collected %d workload snapshots", len(snapshots))
 	return nil
 }
 
