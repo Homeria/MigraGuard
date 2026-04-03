@@ -2,38 +2,32 @@
 
 본 문서는 다른 세션에서 작업을 이어받기 위한 가이드 및 현재 상태 기록입니다.
 
-## 📅 마지막 업데이트: 2026-04-02
-- **현재 브랜치:** `develop` (Phase 2 완료 후 통합됨)
-- **핵심 목표:** DB 마이그레이션 시 락 경합 방지를 위한 CLI 게이트키퍼 구축
-
-## 🛠️ 코딩 규칙 (Coding Standards) - 중요!
-모든 코드 작성 시 다음 규칙을 엄격히 준수해야 합니다.
-1. **주석 언어 분리**:
-   - **영문 (English)**: 함수, 타입, 구조체 필드 등 외부로 노출되는 공식 문서화 주석.
-   - **한글 (Korean)**: 코드 내부의 상세 구현 설명, 로직 힌트, `TODO` 주석.
-2. **CGO 환경**:
-   - `pg_query_go` 및 `go-sqlite3` 라이브러리를 사용하므로, 빌드 및 테스트 환경에 `gcc`가 반드시 설치되어 있어야 함.
-3. **보수적 설계**:
-   - 프로젝트 정체성이 확립되는 단계이므로, 과도한 보일러플레이트 생성보다는 명세(`spec/`)에 충실한 핵심 로직 구현에 집중할 것.
+## 📅 마지막 업데이트: 2026-04-03
+- **현재 상태:** **Phase 1~4 구현 완료 (v3.0 모델 통합)**
+- **핵심 성과:** 대기행렬 이론 기반의 MigraGuard v3.0 위험도 산출 모델을 CLI 게이트키퍼에 성공적으로 통합.
 
 ## ✅ 지금까지 완료된 작업
-1. **Phase 1: Core Parser 구현 완료**:
-   - SQL을 AST로 변환하고 테이블 명, 컬럼 명, PostgreSQL 락 레벨을 추출하는 엔진 구축.
-2. **Phase 2: Data Foundation 구현 완료**:
-   - `internal/db/connection.go`: `pgxpool`을 이용한 PostgreSQL 연결 관리.
-   - `internal/db/workload.go`: `pg_stat_statements` 기반 워크로드 스냅샷 수집.
-   - `internal/db/activity.go`: SQLite WAL 모드 기반 로컬 시계열 저장소 및 데이터 분석 레이어.
-   - `internal/db/collector.go`: 고루틴 Ticker를 이용한 백그라운드 데이터 수집 엔진.
-3. **명세 고도화**:
-   - `spec/feature_roadmap.md`: 전체 페이즈별 세부 체크포인트 수립 및 업데이트.
+1. **Core Parser (Phase 1) 고도화**:
+   - SQL AST 분석 및 테이블 재기록($F_{rewrite}$) 자동 판단 로직 구현.
+2. **Data Foundation (Phase 2) 고도화**:
+   - PostgreSQL 실시간 동적 지표($S_{table}$, $Lag_{repl}$, $C_{active}$, $\lambda$) 수집 체계 구축.
+   - SQLite `table_metrics` 시계열 저장소 확장 및 백그라운드 수집 엔진 통합.
+3. **Risk Engine (Phase 3) 구현**:
+   - `internal/engine/risk.go`: v3.0 수학적 모델 기반 정량적 리스크 점수 및 회복 시간($T_{rec}$) 산출 로직 완성.
+4. **Reporter & Gatekeeper (Phase 4) 구현**:
+   - `cmd/migraguard/analyze.go`: v3.0 리포팅 및 `Exit Code 1` 기반 자동 게이트키핑 통합 완료.
 
-## 🚀 다음 세션에서 수행할 작업 (Next Steps)
-1. **Phase 3: Risk Engine 시작**:
-   - `internal/engine/risk.go`: `Traffic * Lock * Wait` 기반의 정량적 Risk Score 산출 알고리즘 구현.
-2. **알고리즘 정교화**:
-   - SQLite에 저장된 과거 트래픽(Average/Max Calls)을 Risk Score에 반영하는 로직 설계.
-3. **Safe Window 추천**:
-   - 트래픽 밀도가 낮은 최적의 배포 시간대 추천 기능 개발.
+## 🛠️ 기술 사양 (v3.0 핵심)
+- **위험도 산출 공식**:
+  $$RiskScore(\%) = \left( \frac{C_{peak}}{C_{max}} \right) \times 100$$
+  where $C_{peak} = C_{active} + (\lambda \times T_{block})$
+- **주요 지표**: $F_{rewrite}$, $S_{table}$, $Lag_{repl}$, $T_{p99}$, $\lambda$, $\mu_{max}$, $C_{max}$.
+
+## 🚀 향후 과제 (Next Steps)
+1. **설계 상수 외부화**: $Disk_{IO}$, $\mu_{max}$ 등을 `migraguard.yaml` 설정 파일에서 관리하도록 개선.
+2. **테스트 강화**: 실제 운영 워크로드를 모사한 부하 테스트 및 위험도 점수 검증 로직 추가.
+3. **Markdown 리포터**: GitHub Action 등 CI 환경에서 PR 코멘트로 분석 결과를 남기는 기능 개발.
 
 ---
-**세션 연결 가이드:** 다음 세션 시작 시 "GEMINI.md와 spec 폴더를 읽고 프로젝트의 현재 상태와 주석 규칙을 파악해줘"라고 명령하세요.
+**세션 종료:** 모든 핵심 기능 구현과 문서 업데이트가 완료되었습니다. 수고하셨습니다!
+---
