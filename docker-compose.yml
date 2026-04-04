@@ -1,0 +1,42 @@
+services:
+  # 🐘 Target Database (PostgreSQL)
+  # This represents the production DB being monitored.
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: target_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d target_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 🛡️ MigraGuard Agent (Background Metrics Collector)
+  # Continuously collects metrics from 'db' and saves them to SQLite in 'data-volume'.
+  agent:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10"]
+    volumes:
+      - migraguard-data:/app/data
+    restart: always
+
+  # 🔍 MigraGuard Analyze (Test Runner)
+  # This can be used to manually trigger analysis by attaching to this container or using 'docker compose run'.
+  # It shares the SAME volume as the agent to see the metrics.
+  analyze-shell:
+    build: .
+    volumes:
+      - migraguard-data:/app/data
+      - .:/app/code
+    command: ["tail", "-f", "/dev/null"] # Keep it alive for manual testing
+
+volumes:
+  migraguard-data:
+    driver: local
