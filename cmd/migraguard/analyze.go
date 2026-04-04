@@ -6,9 +6,8 @@ import (
 	"os"
 
 	"github.com/Homeria/MigraGuard/internal/db"
-	"github.com/Homeria/MigraGuard/internal/engine"
-	"github.com/Homeria/MigraGuard/internal/parser"
 	"github.com/Homeria/MigraGuard/internal/reporter"
+	"github.com/Homeria/MigraGuard/internal/service"
 	"github.com/spf13/cobra"
 )
 
@@ -48,28 +47,7 @@ This command relies on data collected by the 'migraguard agent'.`,
 
 		ctx := context.Background()
 
-		// [L01] Load SQL file
-		sqlContent, err := os.ReadFile(filePath)
-		if err != nil {
-			fmt.Printf("❌ Failed to read file: %v\n", err)
-			os.Exit(1)
-		}
-
-		// [L02] Static Analysis (AST)
-		results, err := parser.ParseSQL(string(sqlContent))
-		if err != nil {
-			fmt.Printf("❌ Parser Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		if len(results) == 0 {
-			if analyzeOutput == "console" {
-				fmt.Println("⚠️ No valid DDL operations found in the provided SQL file.")
-			}
-			return
-		}
-
-		// [L03] Initialize Adapters
+		// 1. Initialize Adapters (Infrastructure Layer)
 		pg := db.NewPostgresAdapter(analyzeDbString)
 		if err := pg.Connect(ctx); err != nil {
 			fmt.Printf("❌ Failed to connect to PostgreSQL: %v\n", err)
@@ -88,45 +66,21 @@ This command relies on data collected by the 'migraguard agent'.`,
 			fmt.Println("📡 Fetching baseline metrics from SQLite...")
 		}
 
-		// [L05] Initialize Risk Engine with Global Config
-		riskEngine := engine.NewRiskEngine(pg, sqlite, GlobalConfig.Engine)
-		riskEngine.Verbose = Verbose
-
-		var reports []*engine.RiskAnalysisReport
-		hasDanger := false
-
-		for _, res := range results {
-			// [L61] Schema Validation before risk analysis
-			if err := pg.ValidateSchema(ctx, res.TableName, res.Columns); err != nil {
-				if analyzeOutput == "console" {
-					fmt.Printf("\n⚠️  Schema Validation Failed for table '%s': %v\n", res.TableName, err)
-				}
-				// Skip this table as it doesn't exist or has invalid columns
-				continue
-			}
-
-			// [L31~L35] Analyze Risk using Baseline Data
-			report, err := riskEngine.AnalyzeRisk(ctx, res)
-			if err != nil {
-				if analyzeOutput == "console" {
-					fmt.Printf("  ❌ Risk Analysis Error: %v\n", err)
-				}
-				continue
-			}
-			reports = append(reports, report)
-
-			if report.RiskLevel == "Danger" {
-				hasDanger = true
-			}
+		// 2. Initialize and Run Service (Domain Layer)
+		svc := service.NewAnalyzeService(pg, sqlite, GlobalConfig.Engine, Verbose)
+		resp, err := svc.Run(ctx, service.AnalysisTask{SQLPath: filePath})
+		if err != nil {
+			fmt.Printf("❌ Analysis Failed: %v\n", err)
+			os.Exit(1)
 		}
 
-		// [L41] Report results based on requested format
+		// 3. Report Results (Presentation Layer)
 		if analyzeOutput == "markdown" {
-			fmt.Println(reporter.MarkdownReport(results, reports))
+			fmt.Println(reporter.MarkdownReport(resp.Results, resp.Reports))
 		} else {
 			fmt.Println("\n--- MigraGuard v3.1 Risk Analysis Report ---")
-			for i, res := range results {
-				report := reports[i]
+			for i, res := range resp.Results {
+				report := resp.Reports[i]
 				fmt.Printf("\n[Target Table: %s | Operation: %s]\n", res.TableName, res.Operation)
 				fmt.Printf("  📊 Traffic Stats: Current=%.1f, Avg(1h)=%.1f, Peak(24h)=%.1f TPS\n", 
 					report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h)
@@ -146,7 +100,15 @@ This command relies on data collected by the 'migraguard agent'.`,
 			fmt.Println("\n------------------------------------------------")
 		}
 
-		// [L42] Gatekeeping (Exit Code 1 for Danger)
+		// 4. Final Gatekeeping
+		hasDanger := false
+		for _, r := range resp.Reports {
+			if r.RiskLevel == "Danger" {
+				hasDanger = true
+				break
+			}
+		}
+
 		if hasDanger {
 			if analyzeOutput == "console" {
 				fmt.Println("🛑 Danger detected! Migration blocked.")
