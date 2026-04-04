@@ -95,6 +95,15 @@ This command relies on data collected by the 'migraguard agent'.`,
 		hasDanger := false
 
 		for _, res := range results {
+			// [L61] Schema Validation before risk analysis
+			if err := pg.ValidateSchema(ctx, res.TableName, res.Columns); err != nil {
+				if analyzeOutput == "console" {
+					fmt.Printf("\n⚠️  Schema Validation Failed for table '%s': %v\n", res.TableName, err)
+				}
+				// Skip this table as it doesn't exist or has invalid columns
+				continue
+			}
+
 			// [L31~L35] Analyze Risk using Baseline Data
 			report, err := riskEngine.AnalyzeRisk(ctx, res)
 			if err != nil {
