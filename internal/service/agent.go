@@ -10,14 +10,14 @@ import (
 
 // AgentService manages the background workload collection process.
 type AgentService struct {
-	pg            *db.PostgresAdapter
-	sqlite        *db.SQLiteAdapter
+	pg            db.PostgresClient
+	sqlite        db.SQLiteClient
 	interval      time.Duration
 	retentionDays int
 }
 
 // NewAgentService creates a new instance of AgentService.
-func NewAgentService(pg *db.PostgresAdapter, sqlite *db.SQLiteAdapter, interval time.Duration, retentionDays int) *AgentService {
+func NewAgentService(pg db.PostgresClient, sqlite db.SQLiteClient, interval time.Duration, retentionDays int) *AgentService {
 	return &AgentService{
 		pg:            pg,
 		sqlite:        sqlite,
