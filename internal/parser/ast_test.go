@@ -45,6 +45,30 @@ func TestParseSQL_FullVerification(t *testing.T) {
 			expectedLock:      ShareUpdateExclusiveLock,
 			expectedColumns:   nil,
 		},
+		{
+			name:              "Alter Table Add Column (Rewrite Required if default)",
+			sql:               "ALTER TABLE users ADD COLUMN age INT DEFAULT 0;",
+			expectedOp:        "ALTER",
+			expectedTableName: "users",
+			expectedLock:      AccessExclusiveLock,
+			expectedColumns:   []string{"age"},
+		},
+		{
+			name:              "Alter Column Type (Always Rewrite)",
+			sql:               "ALTER TABLE products ALTER COLUMN price TYPE NUMERIC;",
+			expectedOp:        "ALTER",
+			expectedTableName: "products",
+			expectedLock:      AccessExclusiveLock,
+			expectedColumns:   []string{"price"},
+		},
+		{
+			name:              "Set Not Null (Rewrite Required)",
+			sql:               "ALTER TABLE posts ALTER COLUMN content SET NOT NULL;",
+			expectedOp:        "ALTER",
+			expectedTableName: "posts",
+			expectedLock:      AccessExclusiveLock,
+			expectedColumns:   []string{"content"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +92,13 @@ func TestParseSQL_FullVerification(t *testing.T) {
 			}
 			if res.LockLevel != tt.expectedLock {
 				t.Errorf("Expected lock %s, got %s", tt.expectedLock, res.LockLevel)
+			}
+
+			// F_rewrite check (v3.0 Core)
+			if tt.name == "Alter Column Type (Always Rewrite)" || tt.name == "Set Not Null (Rewrite Required)" {
+				if !res.RewriteRequired {
+					t.Errorf("[%s] Expected RewriteRequired = true, got false", tt.name)
+				}
 			}
 			if len(tt.expectedColumns) > 0 {
 				if len(res.Columns) != len(tt.expectedColumns) {
