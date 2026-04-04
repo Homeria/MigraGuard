@@ -37,6 +37,7 @@ vendor/
 .env
 .env.*
 !.env.example
+migraguard.yaml
 
 # Project specific docs (already ignored)
 spec/total_spec.pdf

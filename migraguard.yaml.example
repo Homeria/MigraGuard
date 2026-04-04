@@ -1,0 +1,19 @@
+# MigraGuard Configuration File
+
+# Database connection settings
+database:
+  url: "postgres://user:pass@localhost:5432/dbname"
+  sqlite_path: "migraguard.db"
+
+# Risk Engine parameters (Thresholds)
+engine:
+  disk_io: 104857600   # 100MB/s (Bytes/sec)
+  t_meta: 100.0        # Metadata overhead (ms)
+  mu_max: 5000.0       # Max system TPS (Peak throughput)
+  c_max: 1000          # DB connection limit
+  t_timeout: 5000.0    # Risk threshold timeout (ms)
+
+# Agent behavior
+agent:
+  interval: 60         # Metrics collection interval (seconds)
+  retention: 7         # Data retention period (days)
