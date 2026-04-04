@@ -154,14 +154,67 @@ func (a *SQLiteAdapter) GetLatestTableMetrics(tableName string) (*TableDynamicMe
 	return &m, nil
 }
 
-// TableStats represents aggregated traffic statistics for a table from local storage.
-// 로컬 저장소에서 집계된 테이블 트래픽 통계를 나타냅니다.
-type TableStats struct {
-	TableName   string
-	AvgCalls    float64
-	MaxCalls    int64
-	TotalTime   float64
-	SnapshotCnt int
+// BaselineStats represents statistical traffic data for a table.
+type BaselineStats struct {
+	AvgTPS_1h   float64
+	PeakTPS_24h float64
+}
+
+// GetTableBaselineStats retrieves the average and peak TPS for a table from SQLite.
+// [L32] SQLite에 저장된 과거 데이터를 분석하여 최근 1시간 평균 및 24시간 최대 TPS를 산출합니다.
+func (a *SQLiteAdapter) GetTableBaselineStats(tableName string) (*BaselineStats, error) {
+	// 1시간 평균 TPS 조회
+	avgQuery := `
+		SELECT AVG(tps) FROM table_metrics 
+		WHERE table_name = ? AND timestamp > datetime('now', '-1 hour')
+	`
+	// 24시간 최대 TPS 조회
+	peakQuery := `
+		SELECT MAX(tps) FROM table_metrics 
+		WHERE table_name = ? AND timestamp > datetime('now', '-24 hours')
+	`
+
+	var stats BaselineStats
+	var avg, peak sql.NullFloat64
+
+	if err := a.db.QueryRow(avgQuery, tableName).Scan(&avg); err != nil {
+		return nil, fmt.Errorf("failed to get avg tps: %w", err)
+	}
+	if err := a.db.QueryRow(peakQuery, tableName).Scan(&peak); err != nil {
+		return nil, fmt.Errorf("failed to get peak tps: %w", err)
+	}
+
+	if avg.Valid {
+		stats.AvgTPS_1h = avg.Float64
+	}
+	if peak.Valid {
+		stats.PeakTPS_24h = peak.Float64
+	}
+
+	return &stats, nil
+}
+
+// GetSafeWindow finds the best time to deploy (lowest traffic) within the last 24 hours.
+// [L33] 지난 24시간 동안의 트래픽 패턴을 분석하여 배포하기 가장 안전한 시간대를 찾습니다.
+func (a *SQLiteAdapter) GetSafeWindow() (string, float64, error) {
+	query := `
+		SELECT strftime('%H:00', timestamp) as hour, AVG(tps) as avg_tps
+		FROM table_metrics
+		WHERE timestamp > datetime('now', '-24 hours')
+		GROUP BY hour
+		ORDER BY avg_tps ASC
+		LIMIT 1
+	`
+	var hour string
+	var avgTPS float64
+	err := a.db.QueryRow(query).Scan(&hour, &avgTPS)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", 0, nil
+		}
+		return "", 0, fmt.Errorf("failed to find safe window: %w", err)
+	}
+	return hour, avgTPS, nil
 }
 
 // GetRecentTPSDelta calculates the TPS by comparing the two most recent snapshots for a table.

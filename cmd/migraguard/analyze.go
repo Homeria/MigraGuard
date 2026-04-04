@@ -96,10 +96,17 @@ This command relies on data collected by the 'migraguard agent'.`,
 			}
 
 			// [L41] Report results
+			fmt.Printf("  📊 Traffic Stats: Current=%.1f, Avg(1h)=%.1f, Peak(24h)=%.1f TPS\n", 
+				report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h)
 			fmt.Printf("  ✅ Physical DDL Time (T_ddl): %.2f ms\n", report.EstimatedDDLTime)
 			fmt.Printf("  ✅ Estimated Block Time (T_block): %.2f ms\n", report.BlockingTime)
 			fmt.Printf("  📡 Peak Connections (C_peak): %d\n", report.PeakConnections)
 			fmt.Printf("  🚦 RISK LEVEL: [%s]\n", report.RiskLevel)
+
+			if report.SafeWindow != "" {
+				fmt.Printf("  💡 Tip: Deployment is 80%% safer at %s (Avg: %.1f TPS)\n", 
+					report.SafeWindow, report.SafeWindowTPS)
+			}
 
 			if report.PermanentFailure {
 				fmt.Println("  🚨 CRITICAL: Permanent system failure predicted! Check your mu_max and connection limits.")
