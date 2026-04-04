@@ -90,6 +90,7 @@ This command relies on data collected by the 'migraguard agent'.`,
 
 		// [L05] Initialize Risk Engine with Global Config
 		riskEngine := engine.NewRiskEngine(pg, sqlite, GlobalConfig.Engine)
+		riskEngine.Verbose = Verbose
 
 		var reports []*engine.RiskAnalysisReport
 		hasDanger := false

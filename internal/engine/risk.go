@@ -34,6 +34,7 @@ type RiskEngine struct {
 	pg        *db.PostgresAdapter
 	sqlite    *db.SQLiteAdapter
 	constants RiskConstants
+	Verbose   bool
 }
 
 // RiskAnalysisReport contains the detailed results of the risk evaluation.
@@ -60,16 +61,26 @@ func NewRiskEngine(pg *db.PostgresAdapter, sqlite *db.SQLiteAdapter, constants R
 		pg:        pg,
 		sqlite:    sqlite,
 		constants: constants,
+		Verbose:   false,
 	}
 }
 
 // AnalyzeRisk performs the 5-step risk assessment for a given DDL analysis result.
 // [L-B02, L-B03] Uses SQLite baseline metrics to evaluate risk instantly.
 func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisResult) (*RiskAnalysisReport, error) {
+	if e.Verbose {
+		fmt.Printf("\n[DEBUG] 🔍 Analyzing risk for table: %s (Operation: %s)\n", analysis.TableName, analysis.Operation)
+	}
+
 	// 1. Get Dynamic Metrics from Postgres (Size, Conns, etc.)
 	metrics, err := e.pg.GetTableDynamicMetrics(ctx, analysis.TableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch dynamic metrics: %w", err)
+	}
+
+	if e.Verbose {
+		fmt.Printf("[DEBUG] 🐘 Postgres Metrics: Size=%d bytes, Conns=%d, P99=%.2fms, BaselineTPS=%.2f\n", 
+			metrics.TableSize, metrics.ActiveConnections, metrics.P99Time, metrics.TPS)
 	}
 
 	report := &RiskAnalysisReport{}
@@ -95,6 +106,11 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 		// [L34] Multi-Weighted TPS Calculation (Conservative Approach)
 		// Lambda = Max(Current, Avg_1h * 1.2, Peak_24h * 0.8)
 		metrics.TPS = math.Max(report.CurrentTPS, math.Max(report.AvgTPS1h*1.2, report.PeakTPS24h*0.8))
+
+		if e.Verbose {
+			fmt.Printf("[DEBUG] 📡 SQLite Analytics: Current=%.1f, Avg_1h=%.1f, Peak_24h=%.1f -> Final Lambda=%.2f TPS\n", 
+				report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h, metrics.TPS)
+		}
 	}
 
 	// [Step 1] Estimated DDL Time (T_ddl)
@@ -103,13 +119,25 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 	} else {
 		report.EstimatedDDLTime = e.constants.TMeta
 	}
+	if e.Verbose {
+		fmt.Printf("[DEBUG] ⚙️ Step 1 (T_ddl): %.2f ms (RewriteRequired: %v, DiskIO: %d)\n", 
+			report.EstimatedDDLTime, analysis.RewriteRequired, e.constants.DiskIO)
+	}
 
 	// [Step 2] Total Blocking Time (T_block)
 	report.BlockingTime = metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)
+	if e.Verbose {
+		fmt.Printf("[DEBUG] ⚙️ Step 2 (T_block): %.2f ms (P99: %.1f, Lag: %.1f)\n", 
+			report.BlockingTime, metrics.P99Time, metrics.ReplicationLag)
+	}
 
 	// [Step 3] Peak Connections (C_peak)
 	lambdaPerMs := metrics.TPS / 1000.0
 	report.PeakConnections = metrics.ActiveConnections + int(lambdaPerMs * report.BlockingTime)
+	if e.Verbose {
+		fmt.Printf("[DEBUG] ⚙️ Step 3 (C_peak): %d (Active: %d, Incoming during block: %.2f)\n", 
+			report.PeakConnections, metrics.ActiveConnections, lambdaPerMs * report.BlockingTime)
+	}
 
 	// [Step 4] Recovery Time (T_rec)
 	if metrics.TPS >= e.constants.MuMax {
@@ -124,9 +152,16 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisRe
 			report.RecoveryTime = 0
 		}
 	}
+	if e.Verbose {
+		fmt.Printf("[DEBUG] ⚙️ Step 4 (T_rec): %.2f ms (MuMax: %.1f, RecoveryNeeded: %v)\n", 
+			report.RecoveryTime, e.constants.MuMax, report.PeakConnections > e.constants.CMax)
+	}
 
 	// [Step 5] Risk Score Calculation
 	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
+	if e.Verbose {
+		fmt.Printf("[DEBUG] ⚙️ Step 5 (RiskScore): %.2f%% (C_max: %d)\n", report.RiskScore, e.constants.CMax)
+	}
 
 	// Risk Level Classification
 	if report.RiskScore >= 90.0 || report.PermanentFailure {

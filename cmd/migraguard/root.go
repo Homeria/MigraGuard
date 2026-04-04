@@ -11,6 +11,7 @@ import (
 
 var (
 	cfgFile      string
+	Verbose      bool
 	GlobalConfig = config.DefaultConfig()
 )
 
@@ -38,6 +39,7 @@ func init() {
 
 	// Global persistent flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./migraguard.yaml)")
+	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "Enable verbose output for debugging")
 }
 
 // initConfig reads in config file and ENV variables if set.
