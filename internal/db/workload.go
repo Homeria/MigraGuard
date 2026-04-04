@@ -32,6 +32,52 @@ type TableDynamicMetrics struct {
 	TPS               float64 `json:"tps"`                // Lambda (queries per second)
 }
 
+// ValidateSchema checks if the given table and columns exist in the database.
+// [L61] information_schema를 조회하여 테이블과 컬럼의 실제 존재 여부를 검증합니다.
+func (a *PostgresAdapter) ValidateSchema(ctx context.Context, tableName string, columns []string) error {
+	if a.pool == nil {
+		return fmt.Errorf("database connection is not established")
+	}
+
+	// 1. Check if Table exists
+	var tableExists bool
+	tableQuery := `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables 
+			WHERE table_name = $1 AND table_schema = 'public'
+		)
+	`
+	err := a.pool.QueryRow(ctx, tableQuery, tableName).Scan(&tableExists)
+	if err != nil {
+		return fmt.Errorf("failed to check table existence: %w", err)
+	}
+	if !tableExists {
+		return fmt.Errorf("table '%s' does not exist in the database", tableName)
+	}
+
+	// 2. Check if Columns exist (if provided)
+	if len(columns) > 0 {
+		for _, col := range columns {
+			var colExists bool
+			colQuery := `
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns 
+					WHERE table_name = $1 AND column_name = $2 AND table_schema = 'public'
+				)
+			`
+			err := a.pool.QueryRow(ctx, colQuery, tableName, col).Scan(&colExists)
+			if err != nil {
+				return fmt.Errorf("failed to check column existence: %w", err)
+			}
+			if !colExists {
+				return fmt.Errorf("column '%s' does not exist in table '%s'", col, tableName)
+			}
+		}
+	}
+
+	return nil
+}
+
 // FetchWorkload retrieves the current snapshot from pg_stat_statements.
 // pg_stat_statements에서 현재 워크로드 스냅샷을 가져옵니다.
 func (a *PostgresAdapter) FetchWorkload(ctx context.Context) ([]WorkloadSnapshot, error) {
