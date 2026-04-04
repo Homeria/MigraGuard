@@ -11,11 +11,11 @@ import (
 
 // RiskConstants represents infrastructure-specific constants for risk calculation.
 type RiskConstants struct {
-	DiskIO    int64   // Disk_IO: Bytes/sec
-	TMeta     float64 // T_meta (ms)
-	MuMax     float64 // Mu_max: Max system TPS
-	CMax      int     // C_max: Connection limit
-	TTimeout  float64 // T_timeout (ms)
+	DiskIO    int64   `mapstructure:"disk_io"`    // Disk_IO: Bytes/sec
+	TMeta     float64 `mapstructure:"t_meta"`     // T_meta (ms)
+	MuMax     float64 `mapstructure:"mu_max"`     // Mu_max: Max system TPS
+	CMax      int     `mapstructure:"c_max"`      // C_max: Connection limit
+	TTimeout  float64 `mapstructure:"t_timeout"`  // T_timeout (ms)
 }
 
 // DefaultRiskConstants provides standard values for general environments.

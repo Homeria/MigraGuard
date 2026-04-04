@@ -19,9 +19,9 @@ var (
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
-	// Analyze configuration flags
-	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "PostgreSQL connection string")
-	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "migraguard.db", "Path to the local SQLite storage file")
+	// Analyze configuration flags with GlobalConfig defaults
+	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", GlobalConfig.Database.URL, "PostgreSQL connection string")
+	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", GlobalConfig.Database.SQLitePath, "Path to the local SQLite storage file")
 }
 
 // analyzeCmd represents the analyze command
@@ -79,8 +79,8 @@ This command relies on data collected by the 'migraguard agent'.`,
 
 		fmt.Println("📡 Fetching baseline metrics from SQLite...")
 
-		// [L05] Initialize Risk Engine
-		riskEngine := engine.NewRiskEngine(pg, sqlite, engine.DefaultRiskConstants())
+		// [L05] Initialize Risk Engine with Global Config
+		riskEngine := engine.NewRiskEngine(pg, sqlite, GlobalConfig.Engine)
 
 		fmt.Println("\n--- MigraGuard v3.1 Risk Analysis Report ---")
 
