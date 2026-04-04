@@ -8,12 +8,14 @@ import (
 	"github.com/Homeria/MigraGuard/internal/db"
 	"github.com/Homeria/MigraGuard/internal/engine"
 	"github.com/Homeria/MigraGuard/internal/parser"
+	"github.com/Homeria/MigraGuard/internal/reporter"
 	"github.com/spf13/cobra"
 )
 
 var (
-	analyzeDbString  string
+	analyzeDbString   string
 	analyzeSqlitePath string
+	analyzeOutput     string
 )
 
 func init() {
@@ -22,6 +24,7 @@ func init() {
 	// Analyze configuration flags with GlobalConfig defaults
 	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", GlobalConfig.Database.URL, "PostgreSQL connection string")
 	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", GlobalConfig.Database.SQLitePath, "Path to the local SQLite storage file")
+	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
 }
 
 // analyzeCmd represents the analyze command
@@ -34,7 +37,9 @@ This command relies on data collected by the 'migraguard agent'.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filePath := args[0]
-		fmt.Printf("🔍 Starting instant risk analysis for: %s\n", filePath)
+		if analyzeOutput == "console" {
+			fmt.Printf("🔍 Starting instant risk analysis for: %s\n", filePath)
+		}
 
 		if analyzeDbString == "" {
 			fmt.Println("❌ Error: --db flag is required to connect to PostgreSQL.")
@@ -58,7 +63,9 @@ This command relies on data collected by the 'migraguard agent'.`,
 		}
 
 		if len(results) == 0 {
-			fmt.Println("⚠️ No valid DDL operations found in the provided SQL file.")
+			if analyzeOutput == "console" {
+				fmt.Println("⚠️ No valid DDL operations found in the provided SQL file.")
+			}
 			return
 		}
 
@@ -77,54 +84,68 @@ This command relies on data collected by the 'migraguard agent'.`,
 		}
 		defer sqlite.Close()
 
-		fmt.Println("📡 Fetching baseline metrics from SQLite...")
+		if analyzeOutput == "console" {
+			fmt.Println("📡 Fetching baseline metrics from SQLite...")
+		}
 
 		// [L05] Initialize Risk Engine with Global Config
 		riskEngine := engine.NewRiskEngine(pg, sqlite, GlobalConfig.Engine)
 
-		fmt.Println("\n--- MigraGuard v3.1 Risk Analysis Report ---")
-
+		var reports []*engine.RiskAnalysisReport
 		hasDanger := false
-		for _, res := range results {
-			fmt.Printf("\n[Target Table: %s | Operation: %s]\n", res.TableName, res.Operation)
 
+		for _, res := range results {
 			// [L31~L35] Analyze Risk using Baseline Data
 			report, err := riskEngine.AnalyzeRisk(ctx, res)
 			if err != nil {
-				fmt.Printf("  ❌ Risk Analysis Error: %v\n", err)
+				if analyzeOutput == "console" {
+					fmt.Printf("  ❌ Risk Analysis Error: %v\n", err)
+				}
 				continue
 			}
-
-			// [L41] Report results
-			fmt.Printf("  📊 Traffic Stats: Current=%.1f, Avg(1h)=%.1f, Peak(24h)=%.1f TPS\n", 
-				report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h)
-			fmt.Printf("  ✅ Physical DDL Time (T_ddl): %.2f ms\n", report.EstimatedDDLTime)
-			fmt.Printf("  ✅ Estimated Block Time (T_block): %.2f ms\n", report.BlockingTime)
-			fmt.Printf("  📡 Peak Connections (C_peak): %d\n", report.PeakConnections)
-			fmt.Printf("  🚦 RISK LEVEL: [%s]\n", report.RiskLevel)
-
-			if report.SafeWindow != "" {
-				fmt.Printf("  💡 Tip: Deployment is 80%% safer at %s (Avg: %.1f TPS)\n", 
-					report.SafeWindow, report.SafeWindowTPS)
-			}
-
-			if report.PermanentFailure {
-				fmt.Println("  🚨 CRITICAL: Permanent system failure predicted! Check your mu_max and connection limits.")
-			}
+			reports = append(reports, report)
 
 			if report.RiskLevel == "Danger" {
 				hasDanger = true
 			}
 		}
 
-		fmt.Println("\n------------------------------------------------")
+		// [L41] Report results based on requested format
+		if analyzeOutput == "markdown" {
+			fmt.Println(reporter.MarkdownReport(results, reports))
+		} else {
+			fmt.Println("\n--- MigraGuard v3.1 Risk Analysis Report ---")
+			for i, res := range results {
+				report := reports[i]
+				fmt.Printf("\n[Target Table: %s | Operation: %s]\n", res.TableName, res.Operation)
+				fmt.Printf("  📊 Traffic Stats: Current=%.1f, Avg(1h)=%.1f, Peak(24h)=%.1f TPS\n", 
+					report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h)
+				fmt.Printf("  ✅ Physical DDL Time (T_ddl): %.2f ms\n", report.EstimatedDDLTime)
+				fmt.Printf("  ✅ Estimated Block Time (T_block): %.2f ms\n", report.BlockingTime)
+				fmt.Printf("  📡 Peak Connections (C_peak): %d\n", report.PeakConnections)
+				fmt.Printf("  🚦 RISK LEVEL: [%s]\n", report.RiskLevel)
+
+				if report.SafeWindow != "" {
+					fmt.Printf("  💡 Tip: Deployment is 80%% safer at %s (Avg: %.1f TPS)\n", 
+						report.SafeWindow, report.SafeWindowTPS)
+				}
+				if report.PermanentFailure {
+					fmt.Println("  🚨 CRITICAL: Permanent system failure predicted! Check your mu_max and connection limits.")
+				}
+			}
+			fmt.Println("\n------------------------------------------------")
+		}
 
 		// [L42] Gatekeeping (Exit Code 1 for Danger)
 		if hasDanger {
-			fmt.Println("🛑 Danger detected! Migration blocked.")
+			if analyzeOutput == "console" {
+				fmt.Println("🛑 Danger detected! Migration blocked.")
+			}
 			os.Exit(1)
 		} else {
-			fmt.Println("✅ Analysis complete. No critical risks found.")
+			if analyzeOutput == "console" {
+				fmt.Println("✅ Analysis complete. No critical risks found.")
+			}
 		}
 	},
 }
