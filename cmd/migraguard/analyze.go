@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Homeria/MigraGuard/internal/db"
+	"github.com/Homeria/MigraGuard/internal/errors"
 	"github.com/Homeria/MigraGuard/internal/reporter"
 	"github.com/Homeria/MigraGuard/internal/service"
 	"github.com/spf13/cobra"
@@ -70,7 +71,15 @@ This command relies on data collected by the 'migraguard agent'.`,
 		svc := service.NewAnalyzeService(pg, sqlite, GlobalConfig.Engine, Verbose)
 		resp, err := svc.Run(ctx, service.AnalysisTask{SQLPath: filePath})
 		if err != nil {
-			fmt.Printf("❌ Analysis Failed: %v\n", err)
+			if errors.Is(err, errors.ErrInvalidSQL) {
+				fmt.Println("⚠️  No valid DDL operations found in the provided SQL file.")
+			} else if errors.Is(err, errors.ErrTableNotFound) {
+				fmt.Println("❌  Error: The target table(s) could not be found in the database.")
+			} else if errors.Is(err, errors.ErrDatabaseConn) {
+				fmt.Println("❌  Error: Database connection lost or failed.")
+			} else {
+				fmt.Printf("❌ Analysis Failed: %v\n", err)
+			}
 			os.Exit(1)
 		}
 

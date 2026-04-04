@@ -7,6 +7,7 @@ import (
 
 	"github.com/Homeria/MigraGuard/internal/db"
 	"github.com/Homeria/MigraGuard/internal/engine"
+	"github.com/Homeria/MigraGuard/internal/errors"
 	"github.com/Homeria/MigraGuard/internal/parser"
 )
 
@@ -44,17 +45,17 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	// 1. Load SQL file
 	sqlContent, err := os.ReadFile(task.SQLPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read SQL file: %w", err)
+		return nil, errors.Wrap(err, "AnalyzeService.Run", "failed to read SQL file")
 	}
 
 	// 2. Static Analysis (AST Parsing)
 	results, err := parser.ParseSQL(string(sqlContent))
 	if err != nil {
-		return nil, fmt.Errorf("SQL parser error: %w", err)
+		return nil, errors.Wrap(err, "AnalyzeService.Run", "SQL parser error")
 	}
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no valid DDL operations found in SQL file")
+		return nil, errors.ErrInvalidSQL
 	}
 
 	// 3. Initialize Risk Engine
@@ -68,16 +69,19 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	for _, res := range results {
 		// [L61] Schema Validation
 		if err := s.pg.ValidateSchema(ctx, res.TableName, res.Columns); err != nil {
-			if s.Verbose {
-				fmt.Printf("[DEBUG] Schema validation failed for table '%s': %v. Skipping.\n", res.TableName, err)
+			if errors.Is(err, errors.ErrTableNotFound) || errors.Is(err, errors.ErrColumnNotFound) {
+				if s.Verbose {
+					fmt.Printf("[DEBUG] Validation failed for table '%s': %v. Skipping.\n", res.TableName, err)
+				}
+				continue
 			}
-			continue
+			return nil, errors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "schema validation error")
 		}
 
 		// [L31~L35] Risk Analysis
 		report, err := riskEngine.AnalyzeRisk(ctx, res)
 		if err != nil {
-			return nil, fmt.Errorf("risk analysis error for table %s: %w", res.TableName, err)
+			return nil, errors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "risk analysis execution failed")
 		}
 
 		validResults = append(validResults, res)
@@ -85,7 +89,7 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	}
 
 	if len(validResults) == 0 {
-		return nil, fmt.Errorf("all identified tables failed schema validation")
+		return nil, errors.Wrap(errors.ErrTableNotFound, "AnalyzeService.Run", "no valid tables found for analysis")
 	}
 
 	return &AnalysisResponse{
