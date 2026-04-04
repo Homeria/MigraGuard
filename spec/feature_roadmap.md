@@ -2,29 +2,39 @@
 
 ## 1. 기능 분할 전략 (Feature Breakdown)
 
-### [Phase 1] Core Parser (정적 분석) - ✅ 완료
-- **feat/parser**: SQL AST 분석을 통한 테이블 명, 컬럼 명, 락 레벨 및 $F_{rewrite}$ 추출.
-
-### [Phase 2~5] v3.1 Architecture & Infrastructure - ✅ 완료
-- **feat/agent**: 상시 수집 에이전트(Agent) 독립화 및 시계열 데이터 관리.
-- **feat/risk-engine-v3.1**: 3초 대기 제거 및 베이스라인 모델($\lambda_{final}$) 구축.
-- **feat/reporter-v3.1**: 마크다운 리포터 및 GitHub PR 연동 최적화.
-- **feat/configuration**: 상수 외부화 및 설정 파일(`migraguard.yaml`) 도입.
-- **infra/docker-setup**: 멀티 스테이지 빌드 및 실전형 검증 환경 구축.
-
-### [Phase 6] Integrity & Stability (신뢰성 강화) - ✅ 완료
-- **feat/schema-validation**: `information_schema`를 통한 테이블/컬럼 존재 여부 사전 체크.
-- **feat/debug-mode**: `--verbose` 플래그를 통한 분석 중간 과정 상세 노출.
-- **feat/unit-testing**: 리스크 엔진 및 파서에 대한 시나리오 기반 유닛 테스트 강화.
+### [Phase 1~6] v3.1 Architecture & Stability - ✅ 완료
+- **Phase 1~5**: 에이전트 독립화, 리스크 엔진 고도화, 설정 파일, 도커 환경 등 v3.1 핵심 아키텍처 완성.
+- **Phase 6**: 스키마 정합성 검증, 유닛 테스트, 디버그 모드(Verbose) 구현 완료.
 
 ---
 
-## 2. 향후 릴리즈 계획 (Post v3.1 - Refactoring & Expansion)
+## 2. 대규모 리팩토링 로드맵 (Phase 7 - Architectural Refactoring)
 
-### [Phase 7] Architectural Refactoring (진행 예정)
-- **refactor/cmd-logic**: `cmd/` 내의 비즈니스 로직을 `internal/service` 등으로 분리.
-- **refactor/error-handling**: 전용 에러 타입 정의 및 에러 전파 체계 개선.
-- **refactor/di**: 인터페이스 기반 의존성 주입(Dependency Injection) 적용.
+현재의 기능 기반 구조를 서비스 중심의 유연한 구조로 재설계하기 위해 다음 순서로 작업을 진행합니다.
+
+### [Phase 7-1] Domain Service Extraction (진행 예정)
+- **Branch**: `refactor/domain-service`
+- **Goal**: CLI 커맨드(`cmd/`)에 몰려있는 비즈니스 로직을 `internal/service`로 분리.
+- **Tasks**: `AnalyzeService`, `AgentService` 구조체 신설 및 CLI 로직 이관.
+
+### [Phase 7-2] Dependency Injection & Abstraction
+- **Branch**: `refactor/dependency-injection`
+- **Goal**: 서비스와 어댑터 간의 직접 의존성 제거 및 인터페이스 기반 주입 적용.
+- **Tasks**: `DBAdapter` 인터페이스 정의 및 DI(Dependency Injection) 적용으로 테스트 격리성 확보.
+
+### [Phase 7-3] Error Handling & Domain Errors
+- **Branch**: `refactor/error-management`
+- **Goal**: 하드코딩된 에러 메시지를 정적 타입 에러로 전환하고 에러 처리 일원화.
+- **Tasks**: `internal/errors` 신설 및 도메인 전용 에러 코드 체계 구축.
+
+### [Phase 7-4] Standardized Reporting
+- **Branch**: `refactor/logging-reporter`
+- **Goal**: 출력 로직을 `Reporter` 인터페이스로 추상화하여 확장성 확보.
+- **Tasks**: `ConsoleReporter`와 `MarkdownReporter`를 통합 인터페이스로 관리.
+
+---
+
+## 3. 향후 확장 계획 (Post v3.1)
 
 ### [Phase 8] CI/CD & Ecosystem
 - **feat/github-actions**: GitHub Actions 워크플로우 템플릿 및 배포 가이드.
