@@ -1,4 +1,5 @@
-FROM golang:1.25-bookworm
+# --- Build Stage ---
+FROM golang:1.25-bookworm AS builder
 
 # Install build essentials for CGO (required by pg_query_go)
 RUN apt-get update && apt-get install -y build-essential libssl-dev
@@ -13,9 +14,29 @@ RUN go mod tidy
 COPY . .
 
 # Build the migraguard binary
-RUN go build -o /migraguard ./cmd/migraguard
+# Using CGO_ENABLED=1 because pg_query_go needs CGO
+RUN CGO_ENABLED=1 GOOS=linux go build -o /migraguard ./cmd/migraguard
 
-# Ensure the binary is executable
-RUN chmod +x /migraguard
+# --- Final Stage ---
+FROM debian:bookworm-slim
 
-ENTRYPOINT ["/migraguard"]
+# Install runtime dependencies for CGO and SQLite
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /migraguard /app/migraguard
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data && chmod 777 /app/data
+
+# Default SQLite path (can be overridden by config or flags)
+ENV SQLITE_PATH="/app/data/migraguard.db"
+
+# Expose no ports as this is a CLI/Agent tool
+# ENTRYPOINT will be overridden in docker-compose for different modes
+ENTRYPOINT ["/app/migraguard"]
