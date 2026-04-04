@@ -7,10 +7,9 @@ import (
 )
 
 // Collector orchestrates the background data collection from Postgres to SQLite.
-// Postgres에서 SQLite로의 백그라운드 데이터 수집을 조율합니다.
 type Collector struct {
-	pg            *PostgresAdapter
-	sqlite        *SQLiteAdapter
+	pg            PostgresClient
+	sqlite        SQLiteClient
 	interval      time.Duration
 	retentionDays int
 	targetTables  []string
@@ -18,8 +17,7 @@ type Collector struct {
 }
 
 // NewCollector creates a new Collector instance.
-// 새로운 Collector 인스턴스를 생성합니다.
-func NewCollector(pg *PostgresAdapter, sqlite *SQLiteAdapter, interval time.Duration) *Collector {
+func NewCollector(pg PostgresClient, sqlite SQLiteClient, interval time.Duration) *Collector {
 	return &Collector{
 		pg:            pg,
 		sqlite:        sqlite,

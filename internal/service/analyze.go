@@ -12,14 +12,14 @@ import (
 
 // AnalyzeService handles the end-to-end migration analysis pipeline.
 type AnalyzeService struct {
-	pg        *db.PostgresAdapter
-	sqlite    *db.SQLiteAdapter
+	pg        db.PostgresClient
+	sqlite    db.SQLiteClient
 	constants engine.RiskConstants
 	Verbose   bool
 }
 
 // NewAnalyzeService creates a new instance of AnalyzeService.
-func NewAnalyzeService(pg *db.PostgresAdapter, sqlite *db.SQLiteAdapter, constants engine.RiskConstants, verbose bool) *AnalyzeService {
+func NewAnalyzeService(pg db.PostgresClient, sqlite db.SQLiteClient, constants engine.RiskConstants, verbose bool) *AnalyzeService {
 	return &AnalyzeService{
 		pg:        pg,
 		sqlite:    sqlite,

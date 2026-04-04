@@ -31,11 +31,12 @@ func DefaultRiskConstants() RiskConstants {
 
 // RiskEngine computes the risk of a DDL operation using the MigraGuard v3.1 baseline model.
 type RiskEngine struct {
-	pg        *db.PostgresAdapter
-	sqlite    *db.SQLiteAdapter
+	pg        db.PostgresClient
+	sqlite    db.SQLiteClient
 	constants RiskConstants
 	Verbose   bool
 }
+
 
 // RiskAnalysisReport contains the detailed results of the risk evaluation.
 type RiskAnalysisReport struct {
@@ -56,7 +57,7 @@ type RiskAnalysisReport struct {
 }
 
 // NewRiskEngine creates a new RiskEngine instance.
-func NewRiskEngine(pg *db.PostgresAdapter, sqlite *db.SQLiteAdapter, constants RiskConstants) *RiskEngine {
+func NewRiskEngine(pg db.PostgresClient, sqlite db.SQLiteClient, constants RiskConstants) *RiskEngine {
 	return &RiskEngine{
 		pg:        pg,
 		sqlite:    sqlite,
