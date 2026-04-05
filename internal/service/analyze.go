@@ -2,12 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/Homeria/MigraGuard/internal/db"
 	"github.com/Homeria/MigraGuard/internal/engine"
-	"github.com/Homeria/MigraGuard/internal/errors"
+	migraErrors "github.com/Homeria/MigraGuard/internal/errors"
 	"github.com/Homeria/MigraGuard/internal/parser"
 )
 
@@ -46,19 +47,19 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	// 1. Load SQL file
 	sqlContent, err := os.ReadFile(task.SQLPath)
 	if err != nil {
-		return nil, errors.Wrap(err, "AnalyzeService.Run", "failed to read SQL file")
+		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "failed to read SQL file")
 	}
 
 	// 2. Static Analysis (AST Parsing)
 	// internal/parser/ast.go - 서비스 생성 시 파라미터로 받은 SQL 파일 경로를 기반으로 SQL 파일을 읽어 AST로 파싱하여 반환
 	results, err := parser.ParseSQL(string(sqlContent))
 	if err != nil {
-		return nil, errors.Wrap(err, "AnalyzeService.Run", "SQL parser error")
+		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "SQL parser error")
 	}
 
 	// SQL 파일에서 유효한 DDL 분석 결과가 없는 경우
 	if len(results) == 0 {
-		return nil, errors.ErrInvalidSQL
+		return nil, migraErrors.ErrInvalidSQL
 	}
 
 	// 3. Initialize Risk Engine
@@ -76,13 +77,13 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 		// [L61] Schema Validation
 		// internal/db/workload.go - ValidateSchema 메서드를 호출하여 분석 결과에 포함된 테이블과 컬럼이 타겟 DB에 존재하는지 검증
 		if err := s.pg.ValidateSchema(ctx, res.TableName, res.Columns); err != nil {
-			if errors.Is(err, errors.ErrTableNotFound) || errors.Is(err, errors.ErrColumnNotFound) {
+			if errors.Is(err, migraErrors.ErrTableNotFound) || errors.Is(err, migraErrors.ErrColumnNotFound) {
 				if s.Verbose {
 					fmt.Printf("[DEBUG] Validation failed for table '%s': %v. Skipping.\n", res.TableName, err)
 				}
 				continue
 			}
-			return nil, errors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "schema validation error")
+			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "schema validation error")
 		}
 
 		// [L31~L35] Risk Analysis
@@ -90,7 +91,7 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 		// 분석 결과를 RiskAnalysisReport 구조체로 반환
 		report, err := riskEngine.AnalyzeRisk(ctx, res)
 		if err != nil {
-			return nil, errors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "risk analysis execution failed")
+			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "risk analysis execution failed")
 		}
 
 		// 유효한 분석 결과와 해당 결과에 대한 위험 분석 보고서를 각각 validResults와 finalReports 슬라이스에 저장
@@ -102,7 +103,7 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 
 	// 유효한 분석 결과가 없는 경우, 테이블을 찾을 수 없다는 오류 반환
 	if len(validResults) == 0 {
-		return nil, errors.Wrap(errors.ErrTableNotFound, "AnalyzeService.Run", "no valid tables found for analysis")
+		return nil, migraErrors.Wrap(migraErrors.ErrTableNotFound, "AnalyzeService.Run", "no valid tables found for analysis")
 	}
 
 	// 유효한 분석 결과와 해당 결과에 대한 위험 분석 보고서를 포함하는 AnalysisResponse 구조체를 반환
@@ -111,3 +112,4 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 		Reports: finalReports,
 	}, nil
 }
+

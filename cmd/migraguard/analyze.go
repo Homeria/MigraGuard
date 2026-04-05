@@ -2,12 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/Homeria/MigraGuard/internal/db"
 	"github.com/Homeria/MigraGuard/internal/engine"
-	"github.com/Homeria/MigraGuard/internal/errors"
+	migraErrors "github.com/Homeria/MigraGuard/internal/errors"
 	"github.com/Homeria/MigraGuard/internal/reporter"
 	"github.com/Homeria/MigraGuard/internal/service"
 	"github.com/spf13/cobra"
@@ -114,11 +115,11 @@ This command relies on data collected by the 'migraguard agent'.`,
 
 // handleAnalysisError provides user-friendly error messages.
 func handleAnalysisError(err error) {
-	if errors.Is(err, errors.ErrInvalidSQL) {
+	if errors.Is(err, migraErrors.ErrInvalidSQL) {
 		fmt.Println("⚠️  No valid DDL operations found in the provided SQL file.")
-	} else if errors.Is(err, errors.ErrTableNotFound) {
+	} else if errors.Is(err, migraErrors.ErrTableNotFound) {
 		fmt.Println("❌  Error: The target table(s) could not be found in the database.")
-	} else if errors.Is(err, errors.ErrDatabaseConn) {
+	} else if errors.Is(err, migraErrors.ErrDatabaseConn) {
 		fmt.Println("❌  Error: Database connection lost or failed.")
 	} else {
 		fmt.Printf("❌ Analysis Failed: %v\n", err)
