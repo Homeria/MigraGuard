@@ -1,61 +1,163 @@
-# 🛡️ MigraGuard (DB Migration Gatekeeper)
+# 🛡️ MigraGuard (PostgreSQL Migration Risk Gatekeeper)
 
-> **"트래픽을 모르는 DDL은 시한폭탄과 같다."**
-> 운영 DB의 실제 쿼리 워크로드(`pg_stat_statements`)와 마이그레이션 스크립트(AST)를 교차 검증하여, 락(Lock) 경합으로 인한 서비스 장애를 배포 이전에 원천 차단하는 DevSecOps CLI 도구.
-
-## 📌 프로젝트 개요 (Project Scope)
-
-본 프로젝트는 데이터베이스 스키마 변경 시 발생할 수 있는 락(Lock) 대기 및 커넥션 풀 고갈 장애를 방지하기 위해 기획되었습니다. 최종 상용화 버전(Full Version)의 비전을 달성하기 위한 첫 단계로서, 캡스톤 디자인의 목적에 맞춘 **간이 버전(Lite/MVP Version)**을 우선적으로 구현합니다.
-
-### 🎯 Full Version vs Lite Version (캡스톤 구현 범위)
-
-| 구분 | 🚀 Full Version (최종 목표) | 🛠️ Lite Version (캡스톤 MVP 구현 범위) |
-| :--- | :--- | :--- |
-| **데이터 수집** | 백그라운드 데몬 기반 1시간 주기 시계열 스냅샷 자동 누적 | **CLI 실행 시점** 기준 `pg_stat_statements` 단발성/단기 스냅샷 조회 |
-| **AST 파싱** | 모든 복잡한 DDL, DML 서브쿼리 완벽 분석 및 의존성 추적 | `ALTER TABLE`, `DROP` 등 **대표적인 배타적 락(Lock) 유발 DDL 위주** 파싱 |
-| **위험도 평가** | 중앙값(Median) 연산 기반 **'최적의 안전 시간대(Safe Window)'** 정밀 추천 | 대상 테이블의 **현재 트래픽(TPS) 및 락 레벨 기반 '위험/경고/안전'** 3단계 판정 |
-| **이중 검증** | `EXPLAIN` 기반 실행 계획 변화 추적 및 `pg_stat_activity` 실시간 모니터링 연동 | **`pg_stat_activity`를 통한 배포 직전(Pre-flight) 활성 트랜잭션 수 확인** |
-| **CI/CD 연동** | GitHub App 봇 연동 (PR에 인터랙티브 차트 및 마크다운 자동 코멘트) | **터미널 표준 출력(Table UI) 및 실패 시 `Exit 1` 반환**을 통한 CI 자동 차단 |
-| **상태 저장** | 내장 SQLite 기반 WAL 모드 시계열 데이터 영구 저장소 | 별도 영구 저장 없이 인메모리(In-memory) 연산 후 즉시 결과 반환 |
+> **"운영 트래픽을 모르는 DDL 배포는 시스템 마비의 시작입니다."**
+>
+> MigraGuard는 운영 데이터베이스의 실제 워크로드(TPS, 응답 시간, 커넥션 상태)와 마이그레이션 SQL을 교차 분석하여, **락(Lock) 경합으로 인한 서비스 장애를 배포 이전에 정량적으로 예측**하는 DevSecOps 도구입니다.
 
 ---
 
-## ✨ 간이 버전(Lite Version) 주요 기능 명세
+## 🏗️ 아키텍처 (Dual-Process Architecture)
 
-**1. 마이그레이션 DDL 정적 분석 (AST Parsing)**
-* `pganalyze/pg_query_go`를 활용하여 대상 `.sql` 파일을 추상 구문 트리(AST)로 변환.
-* 변경이 일어나는 타겟 `Table` 및 `Column` 식별.
-* DDL 종류에 따른 요구 Lock Level (예: `AccessExclusiveLock`) 추출.
+MigraGuard v3.2는 데이터 수집의 지속성과 분석의 즉각성을 보장하기 위해 **이중 프로세스 구조**로 설계되었습니다.
 
-**2. 런타임 트래픽 조회 (Workload Analysis)**
-* 운영 중인 PostgreSQL의 `pg_stat_statements` 뷰를 조회하여, 1단계에서 식별된 타겟 테이블을 참조하는 쿼리들의 실행 빈도(Calls)와 평균 실행 시간(Mean Time) 계산.
+1.  **MigraGuard Agent (Background Service)**
+    *   운영 DB의 `pg_stat_statements` 및 시스템 뷰를 정기적으로 스캐닝.
+    *   수집된 메트릭을 내장 SQLite(`migraguard.db`)에 시계열 데이터로 적재.
+    *   최근 1시간 평균, 24시간 피크 트래픽 등 과거 이력 데이터 관리.
+2.  **MigraGuard Analyze (CLI / CI-CD)**
+    *   개발자의 SQL 파일을 AST(Abstract Syntax Tree)로 파싱하여 분석.
+    *   Agent가 수집한 과거/실시간 지표를 기반으로 **5단계 리스크 엔진** 가동.
+    *   위험 점수가 높을 경우 `Exit 1`을 반환하여 배포 파이프라인(GitHub Actions 등) 자동 차단.
 
-**3. CI/CD 게이트키퍼 (Gatekeeping & Pre-flight Check)**
-* 산출된 위험도(Risk Score)가 임계치를 초과할 경우 프로세스 종료 코드 `Exit 1`을 반환하여 GitHub Actions 등의 배포 파이프라인 강제 중단.
-* 분석 통과 후 실제 배포 스크립트가 돌기 직전, `pg_stat_activity`를 1회 조회하여 해당 테이블을 잡고 있는 장기 실행 쿼리(Long-running Query)가 있는지 최종 확인(Pre-flight Check).
+---
 
-## 🛠️ 기술 스택 (Lite Version 기준)
-* **Language:** Go (Golang)
-* **Parser:** `pganalyze/pg_query_go` (PostgreSQL C 파서 포팅)
-* **DB Driver:** `jackc/pgx` (PostgreSQL 통계 뷰 직접 통신)
-* **CLI Framework:** `spf13/cobra` (직관적인 터미널 명령어 지원)
+## 🎯 캡스톤 디자인 구현 범위 (v3.2 핵심 기능)
 
-## 🚀 Usage (CI/CD 파이프라인 적용 예시)
+본 프로젝트는 캡스톤 디자인 최종 결과물로서 아래 기능을 완벽히 구현하였습니다.
 
-GitHub Actions 파일 (`.github/workflows/deploy.yml`) 내에 단일 실행 파일로 손쉽게 통합할 수 있습니다.
+### 1. SQL 정적 분석 (AST Parsing)
+*   `pganalyze/pg_query_go`를 활용하여 PostgreSQL 공식 파서와 100% 호환되는 구문 분석.
+*   `ALTER TABLE`, `CREATE INDEX` 등 DDL 수행 시 **Table Rewrite(재작성)** 발생 여부 자동 판별.
+*   대상 테이블 및 컬럼 존재 여부에 대한 스키마 사전 검증(Validation).
+
+### 2. 5단계 정밀 리스크 모델 (Risk Engine)
+단순한 룰 기반 탐지를 넘어, 대기 행렬 이론(Queuing Theory)을 응용한 수학적 모델링을 수행합니다.
+*   **Step 1. $T_{ddl}$ 예측:** 테이블 크기 및 디스크 I/O 성능 기반 예상 작업 시간 산출.
+*   **Step 2. $T_{block}$ 예측:** $T_{ddl}$ + P99 응답 시간 + 복제 지연(Lag)을 합산한 총 블로킹 시간 도출.
+*   **Step 3. $C_{peak}$ 예측:** 블로킹 중 유입될 신규 커넥션 폭증량($\lambda \times T_{block}$) 계산.
+*   **Step 4. $T_{rec}$ 예측:** 시스템 한계($C_{max}$) 초과 시 서비스 정상화까지 걸리는 회복 시간 예측.
+*   **Step 5. Risk Score:** 최종 부하량 가중치($\lambda_{final}$)를 적용하여 **Safe / Warning / Danger** 판정.
+
+### 3. 지능형 워크로드 분석
+*   **Weighted TPS:** `Max(실시간, 1시간 평균 * 1.2, 24시간 피크 * 0.8)` 공식을 통한 보수적 위험 평가.
+*   **Safe Window 추천:** 최근 24시간 트래픽 패턴을 분석하여 배포에 가장 안전한 시간대(저부하 시간) 자동 추천.
+
+### 4. 유연한 리포팅 및 CI/CD 통합
+*   **Console UI:** 터미널에서 즉시 확인 가능한 컬러풀한 테이블 리포트.
+*   **Markdown Export:** PR 코멘트용 상세 분석 보고서 자동 생성.
+*   **Custom Constants:** 인프라 사양(Disk I/O, Max Connections)에 맞춘 분석 상수 커스터마이징.
+
+---
+
+## 🐳 Docker로 실행하기 (Recommended)
+
+MigraGuard는 운영 데이터베이스(PostgreSQL)와 함께 컨테이너 환경에서 실행하는 것이 가장 권장됩니다.
+
+### 1. 전체 환경 실행 (Agent + Sample DB)
+`docker-compose.yml`을 사용하여 샘플 데이터베이스와 분석 에이전트를 한 번에 띄웁니다.
+```bash
+docker compose up -d
+```
+
+### 2. 특정 SQL 분석 실행 (Analyze)
+에이전트가 실행 중인 상태에서, 공유 볼륨을 통해 실시간 데이터를 기반으로 분석을 수행합니다.
+```bash
+# 로컬의 SQL 파일을 컨테이너를 통해 분석
+docker compose run --rm analyze-shell analyze /app/code/migrations/001_heavy_alter.sql
+```
+
+---
+
+## 🛠️ 시작하기 (Quick Start)
+
+### 1. 전제 조건
+*   **PostgreSQL:** `pg_stat_statements` 확장 설치 및 활성화 필요.
+*   **Go:** v1.25 이상 권장.
+
+### 2. 설정 파일 작성 (`migraguard.yaml`)
+프로젝트 루트 또는 실행 경로에 설정 파일을 작성합니다.
+
+```yaml
+database:
+  postgres: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"
+  sqlite: "./migraguard.db"
+
+agent:
+  interval: "1m"       # 지표 수집 주기
+  retention_days: 7    # 데이터 보관 기간
+
+risk:
+  disk_io: 104857600   # 100MB/s (Table Rewrite 시간 계산용)
+  c_max: 500           # DB 최대 커넥션 수
+  mu_max: 5000.0       # 시스템 한계 TPS
+  t_meta: 100.0        # 메타데이터 변경 기본 지연시간 (ms)
+```
+
+### 3. 에이전트 실행 (수집 모드)
+운영 환경 또는 모니터링 서버에서 상시 실행합니다.
+```bash
+./migraguard agent
+```
+
+### 4. 리스크 분석 실행 (분석 모드)
+마이그레이션 SQL 파일을 대상으로 분석을 수행합니다.
+```bash
+# 기본 콘솔 출력
+./migraguard analyze ./migrations/001_heavy_alter.sql
+
+# 마크다운 파일로 저장 (CI용)
+./migraguard analyze ./migrations/001_heavy_alter.sql --format markdown > report.md
+
+# 상세 로그 포함
+./migraguard analyze ./migrations/001_heavy_alter.sql --verbose
+```
+
+---
+
+## 🚀 CI/CD 적용 예시 (GitHub Actions)
 
 ```yaml
 steps:
-  - name: Checkout code
-    uses: actions/checkout@v3
-
-  - name: Run MigraGuard (Lite)
-    env:
-      DB_URL: ${{ secrets.PROD_DB_URL }}
+  - name: Run MigraGuard Analysis
     run: |
-      ./migraguard analyze ./migrations/V2__add_email_column.sql
-      # 결과가 위험(Danger) 수준일 경우 Exit 1을 반환하여 아래 배포 스텝을 차단함
+      ./migraguard analyze ./deploy/schema_update.sql --format markdown > risk_report.md
+    continue-on-error: false # 위험(Danger) 판정 시 빌드 중단
 
-  - name: Apply Migration
-    run: |
-      flyway migrate -url=...
+  - name: Comment PR
+    uses: thollander/actions-comment-pull-request@v2
+    with:
+      filePath: risk_report.md
+```
+
+---
+
+## 🧪 테스트 환경 구축 (Testing)
+
+MigraGuard의 리스크 분석을 정확히 테스트하기 위해서는 `pg_stat_statements`가 활성화된 PostgreSQL이 필요합니다.
+
+### 1. PostgreSQL 설정
+`postgresql.conf` 파일에 아래 설정을 추가하거나, Docker 실행 시 옵션을 부여합니다.
+```bash
+# Docker 실행 예시
+docker run -d --name mg-db -e POSTGRES_PASSWORD=pass -p 5432:5432 postgres:15-alpine -c shared_preload_libraries=pg_stat_statements
+```
+
+접속 후 확장을 생성합니다.
+```sql
+CREATE EXTENSION pg_stat_statements;
+```
+
+### 2. 시나리오 테스트 케이스
+`migrations/` 폴더 내의 테스트 케이스를 사용하여 분석 엔진의 반응을 확인하세요.
+
+| 리스크 | SQL 파일 | 설명 |
+| :--- | :--- | :--- |
+| **Safe** | `001_safe_set_default.sql` | 단순 기본값 설정 (Metadata only) |
+| **Warning** | `002_warning_add_index.sql` | 인덱스 생성 (Lock competition) |
+| **Danger** | `003_danger_rewrite_type.sql` | 컬럼 타입 변경 (Table Rewrite) |
+
+---
+
+## 📜 라이선스 및 제작
+*   **제작:** Homeria / MigraGuard Team
+*   **기술 스택:** Golang, PostgreSQL, SQLite, Cobra, Viper, pg_query_go

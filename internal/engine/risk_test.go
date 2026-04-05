@@ -1,11 +1,8 @@
 package engine
 
 import (
-	"context"
 	"math"
 	"testing"
-
-	"github.com/Homeria/MigraGuard/internal/parser"
 )
 
 // TestCalculateRiskScore_CoreLogic verifies the mathematical correctness of the queuing model.
@@ -66,12 +63,26 @@ func TestCalculateRiskScore_CoreLogic(t *testing.T) {
 			lambdaPerMs := tt.tps / 1000.0
 			peakConnections := tt.activeConnections + int(lambdaPerMs*blockingTime)
 
-			// Step 4: Risk Score
+			// Step 4: Recovery Time (T_rec)
+			var recoveryTime float64
+			permanentFailure := tt.tps >= constants.MuMax
+			if permanentFailure {
+				recoveryTime = math.Inf(1)
+			} else {
+				recoveryNumerator := float64(peakConnections - constants.CMax)
+				recoveryDenominator := (constants.MuMax - tt.tps) / 1000.0 // per ms
+				if recoveryNumerator > 0 {
+					recoveryTime = recoveryNumerator / recoveryDenominator
+				} else {
+					recoveryTime = 0
+				}
+			}
+
+			// Step 5: Risk Score
 			riskScore := (float64(peakConnections) / float64(constants.CMax)) * 100.0
 
-			// Step 5: Decision
+			// Step 6: Decision
 			var riskLevel string
-			permanentFailure := tt.tps >= constants.MuMax
 			if riskScore >= 90.0 || permanentFailure {
 				riskLevel = "Danger"
 			} else if riskScore >= 60.0 {
@@ -85,8 +96,8 @@ func TestCalculateRiskScore_CoreLogic(t *testing.T) {
 					tt.name, tt.expectedRiskLevel, riskLevel, riskScore, peakConnections)
 			}
 
-			if permanentFailure && !math.IsInf(math.Inf(1)) { // Simplified check
-				// Success if permanent failure is detected correctly
+			if permanentFailure && !math.IsInf(recoveryTime, 1) {
+				t.Errorf("[%s] Expected infinite recovery time for permanent failure, got %.2f", tt.name, recoveryTime)
 			}
 		})
 	}
