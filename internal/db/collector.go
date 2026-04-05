@@ -51,7 +51,7 @@ func (c *Collector) AddTargetTable(tableName string) {
 // 별도의 고루틴에서 백그라운드 수집 프로세스를 시작합니다.
 func (c *Collector) Start(ctx context.Context) {
 	ticker := time.NewTicker(c.interval)
-	
+
 	go func() {
 		log.Printf("Background collector started with interval: %v", c.interval)
 		defer ticker.Stop()
@@ -78,16 +78,18 @@ func (c *Collector) Start(ctx context.Context) {
 // collect performs a single round of data fetching and saving.
 // 데이터 가져오기 및 저장의 단일 라운드를 수행합니다.
 func (c *Collector) collect(ctx context.Context) error {
+
 	// 1. Fetch from Postgres (Workload Snapshots)
-	// PostgreSQL에서 워크로드 스냅샷을 가져옵니다.
+	// internal/db/workload.go - PostgreSQL에 쿼리를 통해 pg_stat_statements 조회 후 []WorkloadSnapshot 형태로 반환
 	snapshots, err := c.pg.FetchWorkload(ctx)
 	if err != nil {
 		return err
 	}
 
+	// 받은 Snapshot이 있을 때만 SQLite에 저장
 	if len(snapshots) > 0 {
 		// 2. Save Snapshots to SQLite
-		// 가져온 스냅샷을 로컬 SQLite에 저장합니다.
+		// internal/db/activity.go - 가져온 스냅샷을 로컬 SQLite에 저장
 		if err := c.sqlite.SaveSnapshots(snapshots); err != nil {
 			return err
 		}
@@ -97,6 +99,10 @@ func (c *Collector) collect(ctx context.Context) error {
 	// 3. Fetch Dynamic Metrics for Target Tables (v3.0 Model)
 	// 대상 테이블들에 대해 v3.0용 동적 지표를 수집합니다.
 	for _, table := range c.targetTables {
+		// internal/db/workload.go - 대상 테이블에 대한 지표(pg_total_relation_size, pg_stat_replication, pg_stat_activity)를 수집
+		// pg_total_relation_size: 특정 테이블이 디스크에서 차지하고 있는 전체 용량을 바이트 단위로 변환한 값
+		// pg_stat_replication : Primary(Master) 서버에 연결된 Replica(standby) 서버들의 목록, 동기화 상태, 데이터 전송 및 적용 위치(LSN - Log Squence Number)
+		// pg_stat_activity : 현재 타겟 DB에 접속해 있는 모든 연결(세션)의 실시간 활동 상태
 		metrics, err := c.pg.GetTableDynamicMetrics(ctx, table)
 		if err != nil {
 			log.Printf("Error fetching metrics for table %s: %v", table, err)
@@ -104,7 +110,7 @@ func (c *Collector) collect(ctx context.Context) error {
 		}
 
 		// 4. Save Table Metrics to SQLite
-		// 수집된 지표를 SQLite에 저장합니다.
+		// internal/db/activity.go - 수집된 지표를 SQLite에 저장.
 		if err := c.sqlite.SaveTableMetrics(metrics); err != nil {
 			log.Printf("Error saving metrics for table %s: %v", table, err)
 		} else {
@@ -113,7 +119,7 @@ func (c *Collector) collect(ctx context.Context) error {
 	}
 
 	// 5. Purge old snapshots (Retention Policy)
-	// 설정된 보존 기간을 초과한 오래된 데이터를 정리합니다.
+	// internal/db/activity.go - 설정된 보존 기간을 초과한 오래된 데이터를 정리하고 VACUUM 호출로 물리 공간 회수.
 	if err := c.sqlite.PurgeOldSnapshots(c.retentionDays); err != nil {
 		log.Printf("Error purging old snapshots: %v", err)
 	}

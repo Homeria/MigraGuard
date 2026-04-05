@@ -44,7 +44,7 @@ func ParseSQL(sql string) ([]AnalysisResult, error) {
 	// AST로 변환된 결과에서 각 노드를 순회하며 DDL 작업을 식별하고 분석 결과를 수집
 	// Stmts : SQL 문장(Statement)들의 리스트, 작업 유형과 영향을 받는 테이블/컬럼 정보를 추출하여 AnalysisResult 구조체에 저장
 	// handleNode : 노드 유형 확인 (ALTER TABLE, CREATE TABLE, DROP TABLE, CREATE INDEX 등) 및 분석 결과 생성
-	//
+	// handleNode를 순회하며 []AnalysisResult 구조체에 작업 유형, 테이블명, 락 레벨, 영향받는 컬럼 목록, 재기록 여부 등을 채워서 분석 결과 리스트를 반환
 	var results []AnalysisResult
 	for _, stmt := range result.Stmts {
 		// [L12] 작업 식별: Identify DDL operations
@@ -60,6 +60,7 @@ func ParseSQL(sql string) ([]AnalysisResult, error) {
 
 // handleNode identifies the statement type and populates AnalysisResult.
 func handleNode(node *pg_query.Node) *AnalysisResult {
+	// []AnalysisResult 구조체에 작업 유형, 테이블명, 락 레벨, 영향받는 컬럼 목록, 재기록 여부 등을 채워 분석 결과 반환
 	if stmt := node.GetAlterTableStmt(); stmt != nil {
 		res := &AnalysisResult{
 			Operation: "ALTER",
@@ -68,6 +69,7 @@ func handleNode(node *pg_query.Node) *AnalysisResult {
 		}
 		// ALTER TABLE 명령들을 순회하며 컬럼 추출 및 Rewrite 여부 판별
 		for _, cmd := range stmt.Cmds {
+
 			if sub := cmd.GetAlterTableCmd(); sub != nil {
 				if sub.Name != "" {
 					res.Columns = append(res.Columns, sub.Name)

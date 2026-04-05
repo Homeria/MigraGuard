@@ -69,12 +69,14 @@ func (a *SQLiteAdapter) initSchema() error {
 // SaveSnapshots persists multiple workload snapshots to the SQLite database.
 // 여러 워크로드 스냅샷을 트랜잭션을 통해 SQLite 데이터베이스에 효율적으로 저장합니다.
 func (a *SQLiteAdapter) SaveSnapshots(snapshots []WorkloadSnapshot) error {
+
 	tx, err := a.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
+	// collector.collect()에서 pg_stat_statements 쿼리를 통해 가져온 Snapshot을 SQLite에 저장하기 시작
 	stmt, err := tx.Prepare(`
 		INSERT INTO workload_snapshots (
 			timestamp, query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read
@@ -112,12 +114,12 @@ func (a *SQLiteAdapter) SaveTableMetrics(m *TableDynamicMetrics) error {
 			timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps
 		) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := a.db.Exec(query, 
-		m.TableName, 
-		m.TableSize, 
-		m.ReplicationLag, 
-		m.ActiveConnections, 
-		m.P99Time, 
+	_, err := a.db.Exec(query,
+		m.TableName,
+		m.TableSize,
+		m.ReplicationLag,
+		m.ActiveConnections,
+		m.P99Time,
 		m.TPS,
 	)
 	if err != nil {
@@ -234,7 +236,7 @@ func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 			(MAX(strftime('%s', timestamp)) - MIN(strftime('%s', timestamp))) as tps
 		FROM recent_snapshots;
 	`
-	
+
 	pattern := "%" + tableName + "%"
 	var tps sql.NullFloat64
 	err := a.db.QueryRow(query, pattern).Scan(&tps)
@@ -249,7 +251,6 @@ func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 	return tps.Float64, nil
 }
 
-
 // Close closes the SQLite database connection.
 // SQLite 데이터베이스 연결을 닫습니다.
 func (a *SQLiteAdapter) Close() error {
@@ -262,6 +263,7 @@ func (a *SQLiteAdapter) Close() error {
 // PurgeOldSnapshots deletes snapshots older than the retention days and optimizes SQLite.
 // 설정된 보존 기간(retentionDays)보다 오래된 스냅샷 데이터를 삭제하고 SQLite 공간을 최적화합니다.
 func (a *SQLiteAdapter) PurgeOldSnapshots(retentionDays int) error {
+
 	// 1. Delete old workload snapshots
 	// 오래된 워크로드 스냅샷을 삭제합니다.
 	workloadQuery := `DELETE FROM workload_snapshots WHERE timestamp < datetime('now', '-' || ? || ' days')`

@@ -2,11 +2,9 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Homeria/MigraGuard/internal/errors"
-	"github.com/jackc/pgx/v5"
 )
 
 // WorkloadSnapshot represents a snapshot of the database workload.
@@ -33,11 +31,14 @@ type TableDynamicMetrics struct {
 
 // ValidateSchema checks if the given table and columns exist in the database.
 func (a *PostgresAdapter) ValidateSchema(ctx context.Context, tableName string, columns []string) error {
+
+	// Database connection pool이 초기화되지 않은 경우
 	if a.pool == nil {
 		return errors.ErrDatabaseConn
 	}
 
 	// 1. Check if Table exists
+	// information_schema.tables 뷰를 조회하여 public 스키마에 지정된 테이블이 존재하는지 확인
 	var tableExists bool
 	tableQuery := `
 		SELECT EXISTS (
@@ -45,10 +46,14 @@ func (a *PostgresAdapter) ValidateSchema(ctx context.Context, tableName string, 
 			WHERE table_name = $1 AND table_schema = 'public'
 		)
 	`
+
+	// 쿼리 실행 및 결과 스캔하여 tableExists 변수에 저장
 	err := a.pool.QueryRow(ctx, tableQuery, tableName).Scan(&tableExists)
+	// 쿼리 실행 중 오류 발생 시
 	if err != nil {
 		return errors.Wrap(err, "ValidateSchema", "failed to check table existence")
 	}
+	// 테이블이 존재하지 않는 경우
 	if !tableExists {
 		return errors.ErrTableNotFound
 	}
@@ -56,6 +61,8 @@ func (a *PostgresAdapter) ValidateSchema(ctx context.Context, tableName string, 
 	// 2. Check if Columns exist (if provided)
 	if len(columns) > 0 {
 		for _, col := range columns {
+			// 컬럼이 존재하는지 확인하기 위해 information_schema.columns 뷰를 조회
+			// public 스키마에 지정된 테이블과 컬럼이 존재하는지 확인
 			var colExists bool
 			colQuery := `
 				SELECT EXISTS (
@@ -82,6 +89,7 @@ func (a *PostgresAdapter) FetchWorkload(ctx context.Context) ([]WorkloadSnapshot
 		return nil, errors.ErrDatabaseConn
 	}
 
+	// pg_stat_statements 쿼리
 	query := `
 		SELECT 
 			queryid, 
@@ -96,15 +104,18 @@ func (a *PostgresAdapter) FetchWorkload(ctx context.Context) ([]WorkloadSnapshot
 		LIMIT 100;
 	`
 
+	// pg_stat_statements 쿼리 전송 및 응답
 	rows, err := a.pool.Query(ctx, query)
 	if err != nil {
 		return nil, errors.Wrap(err, "FetchWorkload", "failed to query pg_stat_statements")
 	}
 	defer rows.Close()
 
+	// snapshot 변수 생성
 	var snapshots []WorkloadSnapshot
 	now := time.Now()
 
+	// pg_stat_statements 쿼리 응답을 WorkloadSnapshot 구조체로 매핑
 	for rows.Next() {
 		var s WorkloadSnapshot
 		s.Timestamp = now
@@ -135,12 +146,14 @@ func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName 
 	metrics := &TableDynamicMetrics{TableName: tableName}
 
 	// [L21] Table Size
+	// pg_total_relation_size: 특정 테이블이 디스크에서 차지하고 있는 전체 용량을 바이트 단위로 변환한 값
 	err := a.pool.QueryRow(ctx, "SELECT pg_total_relation_size($1)", tableName).Scan(&metrics.TableSize)
 	if err != nil {
 		return nil, errors.WrapWithTable(err, "GetTableDynamicMetrics", tableName, "failed to get table size")
 	}
 
 	// [L24] Replication Lag
+	// pg_stat_replication : Primary(Master) 서버에 연결된 Replica(standby) 서버들의 목록, 동기화 상태, 데이터 전송 및 적용 위치(LSN - Log Squence Number)
 	lagQuery := `
 		SELECT COALESCE(EXTRACT(EPOCH FROM (now() - reply_time)), 0)
 		FROM pg_stat_replication
@@ -149,6 +162,7 @@ func (a *PostgresAdapter) GetTableDynamicMetrics(ctx context.Context, tableName 
 	_ = a.pool.QueryRow(ctx, lagQuery).Scan(&metrics.ReplicationLag)
 
 	// [L23] Active Connections
+	// pg_stat_activity : 현재 타겟 DB에 접속해 있는 모든 연결(세션)의 실시간 활동 상태
 	activeQuery := `
 		SELECT count(*)
 		FROM pg_stat_activity
