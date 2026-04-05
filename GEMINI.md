@@ -1,27 +1,28 @@
-# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.1 고도화 완료 및 리팩토링 준비)
+# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.2 아키텍처 완성 및 생태계 확장)
 
-본 문서는 v3.1 에이전트 모델의 기능 구현을 넘어, 대규모 아키텍처 리팩토링을 위한 로드맵을 포함합니다.
+본 문서는 v3.1의 기능 구현을 넘어, 서비스 지향 아키텍처(SOA)로의 리팩토링이 완료된 v3.2 상태를 기록합니다.
 
-## 📅 마지막 업데이트: 2026-04-04 (v3.1 최종)
-- **현재 상태:** **v3.1 기능 구현 완료 및 아키텍처 최적화 단계 진입**
-- **핵심 성과:** 스키마 검증, 유닛 테스트, 디버그 모드, 도커 인프라 등 상용 수준의 안정성 확보 완료.
+## 📅 마지막 업데이트: 2026-04-05 (v3.2 최종)
+- **현재 상태:** **v3.2 아키텍처 리팩토링 완료 및 CI/CD 통합 단계 진입**
+- **핵심 성과:** 도메인 서비스 분리, 인터페이스 기반 DI, 공통 리포터 및 에러 체계 구축 완료.
 
-## ✅ 완료된 작업 (v3.1 Milestone)
-1. **신뢰성 및 정합성 (Stability)**: `ValidateSchema` 도입 및 유닛 테스트(Parser/Engine) 강화.
-2. **투명성 및 디버깅 (Observability)**: `--verbose` 플래그 및 단계별 Trace 로깅 구현.
-3. **인프라 및 설정 (Infra & Config)**: Docker 공유 볼륨 기반 연동 및 `migraguard.yaml` 환경 설정 완성.
+## ✅ 완료된 작업 (Milestones)
+1. **신뢰성 및 정합성 (v3.1)**: `ValidateSchema` 도입 및 유닛 테스트(Parser/Engine) 강화.
+2. **아키텍처 고도화 (v3.2)**: 
+   - `internal/service`: 비즈니스 로직(Analyze/Agent) 분리.
+   - `Dependency Injection`: 인터페이스 기반 DB 어댑터 주입.
+   - `Error Management`: 도메인 전용 에러 체계 구축.
+   - `Unified Reporting`: `Reporter` 인터페이스를 통한 다형적 출력(Console/Markdown).
 
-## 🚀 대규모 리팩토링 로드맵 (Phase 7 전략)
-기능 구현 중심의 코드를 유지보수가 용이한 서비스 지향 아키텍처로 전환하기 위해 다음 순서로 브랜치를 운영합니다.
+## 🚀 향후 로드맵 (Phase 8~9 전략)
+기반이 다져진 아키텍처를 바탕으로 실제 개발 현장에 적용하기 위한 생태계 확장을 진행합니다.
 
-1. **`refactor/domain-service` (비즈니스 로직 추출)**:
-   - `cmd/` 내의 거대한 `Run` 함수에서 분석/수집 로직을 `internal/service`로 분리.
-2. **`refactor/dependency-injection` (의존성 주입)**:
-   - 어댑터와 서비스 간의 결합도를 낮추기 위해 인터페이스 기반 DI(Dependency Injection) 적용.
-3. **`refactor/error-management` (에러 체계화)**:
-   - 전용 에러 타입 정의 및 최상단(CLI)까지의 에러 전파 체계 개선.
-4. **`refactor/logging-reporter` (출력 로직 공통화)**:
-   - `Reporter` 인터페이스를 통해 콘솔/마크다운 등 다양한 출력 형식의 확장성 확보.
+1. **`feat/github-actions` (CI/CD 통합)**:
+   - GitHub Action용 Docker 이미지 최적화 및 워크플로우 템플릿 제공.
+2. **`feat/api-mode` (v4.0 준비)**:
+   - Agent를 HTTP API 서버로 전환하여 원격 분석 및 대시보드 연동 지원.
+3. **`feat/advanced-observability` (정밀 분석)**:
+   - 테이블별 Read/Write 비율 분석을 통한 더욱 정교한 락 경합 예측.
 
 ## 🛠️ 기술 사양 (v3.1 최종)
 - **실행 구조**: `Agent (상시 수집)` ↔ `SQLite (공유 볼륨)` ↔ `Analyze CLI (즉각 분석)`
