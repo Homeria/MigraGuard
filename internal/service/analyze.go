@@ -74,16 +74,15 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	// 4. Validation & Analysis Loop
 
 	for _, res := range results {
-		// [L61] Schema Validation
-		// internal/db/workload.go - ValidateSchema 메서드를 호출하여 분석 결과에 포함된 테이블과 컬럼이 타겟 DB에 존재하는지 검증
-		if err := s.pg.ValidateSchema(ctx, res.TableName, res.Columns); err != nil {
+		// [L61] 운영 DB 스키마 유효성 검사 (테이블/컬럼 존재 여부 확인)
+		if err := s.pg.CheckTableSchemaPresence(ctx, res.TableName, res.Columns); err != nil {
 			if errors.Is(err, migraErrors.ErrTableNotFound) || errors.Is(err, migraErrors.ErrColumnNotFound) {
 				if s.Verbose {
-					fmt.Printf("[DEBUG] Validation failed for table '%s': %v. Skipping.\n", res.TableName, err)
+					fmt.Printf("[DEBUG] 검증 실패: 테이블 '%s'가 존재하지 않거나 컬럼 정보가 불일치함 (%v). 건너뜁니다.\n", res.TableName, err)
 				}
 				continue
 			}
-			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "schema validation error")
+			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "스키마 검증 도중 오류 발생")
 		}
 
 		// [L31~L35] Risk Analysis

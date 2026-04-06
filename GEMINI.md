@@ -1,27 +1,27 @@
-# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.3 정밀 수집 설계 진입)
+# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.3 정밀 수집 및 리팩토링 완료)
 
-본 문서는 v3.2 아키텍처 완성과 더불어, 데이터 수집 정밀도를 극대화하기 위한 v3.3 설계 단계를 기록합니다.
+본 문서는 v3.3 정밀 데이터 수집 로직 구현과 DB 레이어 모듈화 완료를 기록하며, 차기 단계인 고충실도 시뮬레이션 설계를 다룹니다.
 
-## 📅 마지막 업데이트: 2026-04-05 (v3.3 설계 중)
-- **현재 상태:** **v3.3 정밀 데이터 수집(Delta Collection) 설계 단계**
+## 📅 마지막 업데이트: 2026-04-06 (v3.4 시뮬레이션 설계 중)
+- **현재 상태:** **v3.4 실환경 모사 시뮬레이터(Load Generator) 설계 단계**
 - **핵심 성과:** 
-  - **v3.2 완료**: Docker 기반 이중 프로세스 아키텍처 및 실환경 검증 인프라 구축 완료.
-  - **Delta Logic Design**: `pg_stat_statements`의 누적치를 구간별 차이값(Delta)으로 변환하는 저장 로직 설계 완료.
-  - **Persistence Strategy**: 메모리가 아닌 SQLite 내 `original_pg_stat_statements` 테이블을 활용한 데이터 보존 전략 수립.
+  - **v3.3 완료**: `pg_stat_statements` 누적치를 구간별 차이값(Delta)으로 정밀 변환하는 엔진 구현 완료.
+  - **DB Layer Refactoring**: SQLite와 PostgreSQL 어댑터를 역할별로 6개의 모듈로 세분화하여 결합도 낮춤.
+  - **Modular Architecture**: `models.go`, `repository.go`, `analyzer.go` 등으로의 코드 분리를 통한 유지보수성 극대화.
 
 ## ✅ 완료된 작업 (Milestones)
-1. **v3.2 아키텍처 고도화**: 도메인 서비스 분리(SOA) 및 Docker Volume을 통한 데이터 공유 구조 완성.
-2. **Infra Automation**: `init-db.sql` 및 영속성 볼륨 설정을 통한 원클릭 환경 구축.
-3. **Spec Refactoring**: 12개의 문서를 4개의 핵심 설계 문서로 통합 및 리팩토링 완료.
+1. **v3.3 정밀 수집 엔진**: 에이전트 재시작 시에도 델타 계산의 연속성을 보장하는 영속성 전략 구축.
+2. **DB 레이어 모듈화**: SOA 구조를 넘어 데이터 계층 내부의 관심사 분리(SoC) 달성.
+3. **한글 로그 및 주석**: 운영 가독성을 위해 핵심 로직의 로그와 함수명을 직관적으로 정비.
 
 ## 🚀 향후 로드맵 (Phase 8~10 전략)
-1. **`feat/delta-collection` (v3.3 핵심)**:
-   - **Cumulative to Delta**: `pg_stat_statements`의 누적 데이터에서 수집 주기 사이의 실제 부하량(Delta)을 추출하는 로직 구현.
-   - **Original Stats Tracking**: SQLite에 마지막 원본 수집 데이터를 별도로 보관하여 에이전트 재시작 후에도 정밀한 차이값 계산 보장.
-2. **`feat/github-integration` (v3.4 예정)**:
-   - GitHub Actions 워크플로우 및 PR 코멘트 봇 연동을 통한 CI/CD 통합.
-3. **`feat/load-generator`**:
-   - 실환경 시뮬레이션을 위한 커스텀 트래픽 생성 툴 개발.
+1. **`feat/load-generator` (v3.4 핵심)**:
+   - **Service Mimicry**: 단순 `pgbench`가 아닌 이커머스/SNS 등 실제 서비스 트래픽 패턴을 모사하는 Go 기반 부하 생성기 개발.
+   - **Dynamic Load Control**: 시나리오에 따라 실시간으로 TPS를 조절하여 리스크 엔진의 민감도 검증.
+2. **`feat/github-integration` (v3.5 예정)**:
+   - GitHub Actions 및 PR 코멘트 봇을 통한 DevSecOps 파이프라인 완성.
+3. **`feat/api-mode` (v4.0)**:
+   - 에이전트를 MCP(Model Context Protocol) 서버로 확장하여 AI 에이전트와 연동.
 
 ---
-**세션 종료:** v3.3의 핵심인 정밀 수집 로직 설계가 완료되었습니다. 이제 누적값이 아닌 실제 구간별 부하량을 기반으로 한 더욱 정확한 리스크 분석이 가능해질 것입니다.
+**세션 종료:** 데이터 수집의 정밀도와 코드의 구조적 견고함이 확보되었습니다. 이제 실제 서비스와 유사한 트래픽 환경에서 MigraGuard의 리스크 판단 능력을 한 단계 더 검증할 차례입니다.
