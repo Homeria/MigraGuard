@@ -75,41 +75,76 @@ func (c *Collector) Start(ctx context.Context) {
 	}()
 }
 
-// collect performs a single round of data fetching and saving.
-// 데이터 가져오기 및 저장의 단일 라운드를 수행합니다.
+// collect performs a single round of data fetching, computing delta, and saving.
+// 데이터 가져오기, 델타(차이값) 계산 및 저장의 단일 라운드를 수행합니다.
 func (c *Collector) collect(ctx context.Context) error {
 
-	// 1. Fetch from Postgres (Workload Snapshots)
-	// internal/db/workload.go - PostgreSQL에 쿼리를 통해 pg_stat_statements 조회 후 []WorkloadSnapshot 형태로 반환
-	snapshots, err := c.pg.FetchWorkload(ctx)
+	// 1. Fetch current cumulative snapshots from Postgres
+	currentSnapshots, err := c.pg.FetchWorkload(ctx)
 	if err != nil {
 		return err
 	}
 
-	// 받은 Snapshot이 있을 때만 SQLite에 저장
-	if len(snapshots) > 0 {
-		// 2. Save Snapshots to SQLite
-		// internal/db/activity.go - 가져온 스냅샷을 로컬 SQLite에 저장
-		if err := c.sqlite.SaveSnapshots(snapshots); err != nil {
-			return err
-		}
-		log.Printf("Successfully collected %d workload snapshots", len(snapshots))
+	if len(currentSnapshots) == 0 {
+		return nil
 	}
 
-	// 3. Fetch Dynamic Metrics for Target Tables (v3.0 Model)
+	// 2. Fetch last original (cumulative) snapshots from SQLite
+	previousSnapshots, err := c.sqlite.GetLastOriginalSnapshots()
+	if err != nil {
+		log.Printf("Warning: failed to fetch previous stats from SQLite: %v", err)
+		previousSnapshots = make(map[int64]WorkloadSnapshot)
+	}
+
+	// 3. Compute Delta (Current - Previous)
+	var deltaSnapshots []WorkloadSnapshot
+	for _, current := range currentSnapshots {
+		delta := current // 기본적으로 현재 값을 유지
+
+		if prev, ok := previousSnapshots[current.QueryID]; ok {
+			// 차이값 계산
+			delta.Calls = current.Calls - prev.Calls
+			delta.TotalTime = current.TotalTime - prev.TotalTime
+			delta.Rows = current.Rows - prev.Rows
+			delta.SharedBlksHit = current.SharedBlksHit - prev.SharedBlksHit
+			delta.SharedBlksRead = current.SharedBlksRead - prev.SharedBlksRead
+
+			// 통계 초기화(Reset) 감지: 차이값이 음수면 현재 값을 델타로 사용
+			if delta.Calls < 0 {
+				delta = current
+			}
+		}
+
+		// 해당 주기에 활동(Calls)이 있었던 경우만 저장 대상에 포함
+		if delta.Calls > 0 {
+			deltaSnapshots = append(deltaSnapshots, delta)
+		}
+	}
+
+	// 4. Save Delta Snapshots to SQLite (workload_snapshots)
+	if len(deltaSnapshots) > 0 {
+		if err := c.sqlite.SaveSnapshots(deltaSnapshots); err != nil {
+			return err
+		}
+		log.Printf("Successfully collected %d delta workload snapshots", len(deltaSnapshots))
+	}
+
+	// 5. Update Original (cumulative) stats in SQLite for next interval
+	if err := c.sqlite.UpsertOriginalSnapshots(currentSnapshots); err != nil {
+		log.Printf("Error updating original snapshots: %v", err)
+	}
+
+	// 6. Fetch Dynamic Metrics for Target Tables (v3.0 Model)
 	// 대상 테이블들에 대해 v3.0용 동적 지표를 수집합니다.
 	for _, table := range c.targetTables {
 		// internal/db/workload.go - 대상 테이블에 대한 지표(pg_total_relation_size, pg_stat_replication, pg_stat_activity)를 수집
-		// pg_total_relation_size: 특정 테이블이 디스크에서 차지하고 있는 전체 용량을 바이트 단위로 변환한 값
-		// pg_stat_replication : Primary(Master) 서버에 연결된 Replica(standby) 서버들의 목록, 동기화 상태, 데이터 전송 및 적용 위치(LSN - Log Squence Number)
-		// pg_stat_activity : 현재 타겟 DB에 접속해 있는 모든 연결(세션)의 실시간 활동 상태
 		metrics, err := c.pg.GetTableDynamicMetrics(ctx, table)
 		if err != nil {
 			log.Printf("Error fetching metrics for table %s: %v", table, err)
 			continue
 		}
 
-		// 4. Save Table Metrics to SQLite
+		// 7. Save Table Metrics to SQLite
 		// internal/db/activity.go - 수집된 지표를 SQLite에 저장.
 		if err := c.sqlite.SaveTableMetrics(metrics); err != nil {
 			log.Printf("Error saving metrics for table %s: %v", table, err)
@@ -118,7 +153,7 @@ func (c *Collector) collect(ctx context.Context) error {
 		}
 	}
 
-	// 5. Purge old snapshots (Retention Policy)
+	// 8. Purge old snapshots (Retention Policy)
 	// internal/db/activity.go - 설정된 보존 기간을 초과한 오래된 데이터를 정리하고 VACUUM 호출로 물리 공간 회수.
 	if err := c.sqlite.PurgeOldSnapshots(c.retentionDays); err != nil {
 		log.Printf("Error purging old snapshots: %v", err)
