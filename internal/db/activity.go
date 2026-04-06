@@ -61,9 +61,75 @@ func (a *SQLiteAdapter) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON table_metrics(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_metrics_table_name ON table_metrics(table_name);
+
+	CREATE TABLE IF NOT EXISTS original_pg_stat_statements (
+		query_id BIGINT PRIMARY KEY,
+		query TEXT,
+		calls BIGINT,
+		total_time DOUBLE,
+		rows_affected BIGINT,
+		shared_blks_hit BIGINT,
+		shared_blks_read BIGINT,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := a.db.Exec(query)
 	return err
+}
+
+// GetLastOriginalSnapshots retrieves the last recorded cumulative stats for delta calculation.
+func (a *SQLiteAdapter) GetLastOriginalSnapshots() (map[int64]WorkloadSnapshot, error) {
+	query := `SELECT query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read FROM original_pg_stat_statements`
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query original stats: %w", err)
+	}
+	defer rows.Close()
+
+	snapshots := make(map[int64]WorkloadSnapshot)
+	for rows.Next() {
+		var s WorkloadSnapshot
+		err := rows.Scan(&s.QueryID, &s.Query, &s.Calls, &s.TotalTime, &s.Rows, &s.SharedBlksHit, &s.SharedBlksRead)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan original stat row: %w", err)
+		}
+		snapshots[s.QueryID] = s
+	}
+	return snapshots, nil
+}
+
+// UpsertOriginalSnapshots updates the last recorded cumulative stats in SQLite.
+func (a *SQLiteAdapter) UpsertOriginalSnapshots(snapshots []WorkloadSnapshot) error {
+	tx, err := a.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO original_pg_stat_statements (
+			query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(query_id) DO UPDATE SET
+			calls = excluded.calls,
+			total_time = excluded.total_time,
+			rows_affected = excluded.rows_affected,
+			shared_blks_hit = excluded.shared_blks_hit,
+			shared_blks_read = excluded.shared_blks_read,
+			updated_at = CURRENT_TIMESTAMP
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare upsert: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, s := range snapshots {
+		_, err := stmt.Exec(s.QueryID, s.Query, s.Calls, s.TotalTime, s.Rows, s.SharedBlksHit, s.SharedBlksRead)
+		if err != nil {
+			return fmt.Errorf("failed to execute upsert: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 // SaveSnapshots persists multiple workload snapshots to the SQLite database.
@@ -219,12 +285,12 @@ func (a *SQLiteAdapter) GetSafeWindow() (string, float64, error) {
 	return hour, avgTPS, nil
 }
 
-// GetRecentTPSDelta calculates the TPS by comparing the two most recent snapshots for a table.
-// [L22] 최근 두 스냅샷의 누적 호출 수 차이(Delta)를 이용해 실제 초당 트랜잭션 수(TPS)를 계산합니다.
+// GetRecentTPSDelta calculates the TPS using the most recent delta snapshot.
+// [L22] 최근 스냅샷의 델타(변화량) 호출 수를 시간 간격으로 나누어 실제 초당 트랜잭션 수(TPS)를 계산합니다.
 func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 	query := `
-		WITH recent_snapshots AS (
-			SELECT timestamp, SUM(calls) as total_calls
+		WITH recent AS (
+			SELECT timestamp, SUM(calls) as delta_calls
 			FROM workload_snapshots
 			WHERE query LIKE ?
 			GROUP BY timestamp
@@ -232,10 +298,12 @@ func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 			LIMIT 2
 		)
 		SELECT 
-			(MAX(total_calls) - MIN(total_calls)) / 
-			(MAX(strftime('%s', timestamp)) - MIN(strftime('%s', timestamp))) as tps
-		FROM recent_snapshots;
+			CAST(MAX(delta_calls) AS DOUBLE) / 
+			NULLIF(MAX(strftime('%s', timestamp)) - MIN(strftime('%s', timestamp)), 0) as tps
+		FROM recent;
 	`
+	// 참고: LIMIT 2를 가져오는 이유는 두 스냅샷 사이의 실제 시간 간격(strftime 차이)을 정확히 알기 위함입니다.
+	// 결과적으로 가장 최근(MAX)의 delta_calls를 두 스냅샷 사이의 초 단위 시간으로 나눕니다.
 
 	pattern := "%" + tableName + "%"
 	var tps sql.NullFloat64
@@ -245,7 +313,7 @@ func (a *SQLiteAdapter) GetRecentTPSDelta(tableName string) (float64, error) {
 	}
 
 	if !tps.Valid {
-		return 0, nil // 데이터가 부족한 경우 0 반환
+		return 0, nil
 	}
 
 	return tps.Float64, nil

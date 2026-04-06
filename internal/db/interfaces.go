@@ -20,5 +20,7 @@ type SQLiteClient interface {
 	SaveSnapshots(snapshots []WorkloadSnapshot) error
 	SaveTableMetrics(m *TableDynamicMetrics) error
 	PurgeOldSnapshots(retentionDays int) error
+	GetLastOriginalSnapshots() (map[int64]WorkloadSnapshot, error)
+	UpsertOriginalSnapshots(snapshots []WorkloadSnapshot) error
 	Close() error
 }
