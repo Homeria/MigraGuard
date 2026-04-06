@@ -24,7 +24,7 @@ func DefaultRiskConstants() RiskConstants {
 		DiskIO:   100 * 1024 * 1024, // 100MB/s
 		TMeta:    100.0,             // 100ms
 		MuMax:    5000.0,            // 5000 TPS
-		CMax:     1000,              // 1000 Conns
+		CMax:     100,               // 테스트를 위해 1000 -> 100으로 하향 조정
 		TTimeout: 5000.0,            // 5s
 	}
 }

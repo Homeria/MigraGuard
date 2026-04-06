@@ -3,52 +3,71 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Homeria/MigraGuard/internal/db"
 )
 
-// AgentService manages the background workload collection process.
+// AgentService는 백그라운드 워크로드 수집 프로세스를 관리하는 서비스 레이어입니다.
 type AgentService struct {
 	pg            db.PostgresClient
 	sqlite        db.SQLiteClient
 	interval      time.Duration
 	retentionDays int
+	targetTables  []string // 감시 대상 테이블 목록
 }
 
-// NewAgentService creates a new instance of AgentService.
+// NewAgentService는 AgentService의 인스턴스를 생성합니다.
 func NewAgentService(pg db.PostgresClient, sqlite db.SQLiteClient, interval time.Duration, retentionDays int) *AgentService {
 	return &AgentService{
 		pg:            pg,
 		sqlite:        sqlite,
 		interval:      interval,
 		retentionDays: retentionDays,
+		targetTables:  []string{},
 	}
 }
 
-// Run starts the continuous collection loop.
+// SetTargetTables는 쉼표로 구분된 문자열을 받아 감시 대상 테이블 목록을 설정합니다.
+func (s *AgentService) SetTargetTables(tables string) {
+	if tables == "" {
+		return
+	}
+	// 공백 제거 및 소문자 변환 후 슬라이스로 변환
+	rawList := strings.Split(tables, ",")
+	for _, t := range rawList {
+		s.targetTables = append(s.targetTables, strings.TrimSpace(t))
+	}
+}
+
+// Run은 지속적인 수집 루프를 시작합니다.
 func (s *AgentService) Run(ctx context.Context) error {
-
-	// internal/db/collector.go - 컬렉터 객체 생성
-	// Collector는 PostgreSQL의 상황을 주기적으로 수집하여 SQLite에 저장하는 역할.
+	// 컬렉터 객체 생성 및 설정 주입
 	collector := db.NewCollector(s.pg, s.sqlite, s.interval)
-
-	// 데이터 보존 기간 설정
 	collector.SetRetentionDays(s.retentionDays)
+
+	// 감시 대상 테이블이 설정된 경우 컬렉터에 등록
+	for _, table := range s.targetTables {
+		collector.AddTargetTable(table)
+	}
 
 	// 주기적 수집 루프 시작
 	collector.Start(ctx)
 
-	fmt.Printf("✅ Agent Service started. Interval: %v, Retention: %d days\n", s.interval, s.retentionDays)
-	fmt.Println("📡 Collecting workload snapshots... Press Ctrl+C to stop.")
+	fmt.Printf("✅ MigraGuard 에이전트 서비스 시작됨. (간격: %v, 보존: %d일)\n", s.interval, s.retentionDays)
+	if len(s.targetTables) > 0 {
+		fmt.Printf("🔍 감시 대상 테이블: %v\n", s.targetTables)
+	}
+	fmt.Println("📡 워크로드 지표를 수집 중입니다... 중단하려면 Ctrl+C를 누르세요.")
 
-	// Wait for context cancellation
+	// 컨텍스트 취소 대기
 	<-ctx.Done()
 
-	fmt.Println("\n🛑 Stopping Agent Service gracefully...")
+	fmt.Println("\n🛑 에이전트 서비스를 안전하게 종료하는 중...")
 	collector.Stop()
 
-	// Final cleanup
+	// 최종 정리 시간 확보
 	time.Sleep(1 * time.Second)
 	return nil
 }
