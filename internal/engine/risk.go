@@ -9,16 +9,16 @@ import (
 	"github.com/Homeria/MigraGuard/internal/parser"
 )
 
-// RiskConstants represents infrastructure-specific constants for risk calculation.
+// RiskConstants는 리스크 계산에 사용되는 인프라 성능 지표 및 임계값 설정입니다.
 type RiskConstants struct {
-	DiskIO   int64   `mapstructure:"disk_io"`   // Disk_IO: Bytes/sec
-	TMeta    float64 `mapstructure:"t_meta"`    // T_meta (ms)
-	MuMax    float64 `mapstructure:"mu_max"`    // Mu_max: Max system TPS
-	CMax     int     `mapstructure:"c_max"`     // C_max: Connection limit
-	TTimeout float64 `mapstructure:"t_timeout"` // T_timeout (ms)
+	DiskIO   int64   `mapstructure:"disk_io"`   // 디스크 I/O 속도 (Bytes/sec) - 재작성(Rewrite) 시간 예측용
+	TMeta    float64 `mapstructure:"t_meta"`    // 메타데이터 변경 기본 시간 (ms)
+	MuMax    float64 `mapstructure:"mu_max"`    // 시스템의 최대 처리 가능 TPS (Mu_max)
+	CMax     int     `mapstructure:"c_max"`     // DB 최대 허용 연결 수 (Connection Limit)
+	TTimeout float64 `mapstructure:"t_timeout"` // 쿼리 타임아웃 임계치 (ms)
 }
 
-// DefaultRiskConstants provides standard values for general environments.
+// DefaultRiskConstants는 일반적인 운영 환경을 위한 표준 권장값을 제공합니다.
 func DefaultRiskConstants() RiskConstants {
 	return RiskConstants{
 		DiskIO:   100 * 1024 * 1024, // 100MB/s
@@ -29,7 +29,7 @@ func DefaultRiskConstants() RiskConstants {
 	}
 }
 
-// RiskEngine computes the risk of a DDL operation using the MigraGuard v3.1 baseline model.
+// RiskEngine은 MigraGuard v3.2 정밀 리스크 모델을 기반으로 DDL 작업의 위험도를 산출합니다.
 type RiskEngine struct {
 	pg        db.PostgresClient
 	sqlite    db.SQLiteClient
@@ -37,25 +37,25 @@ type RiskEngine struct {
 	Verbose   bool
 }
 
-// RiskAnalysisReport contains the detailed results of the risk evaluation.
+// RiskAnalysisReport는 위험도 평가의 상세 결과와 근거 데이터를 담고 있는 최종 리포트입니다.
 type RiskAnalysisReport struct {
-	RiskScore        float64 // Final risk percentage (%)
-	EstimatedDDLTime float64 // T_ddl (ms)
-	BlockingTime     float64 // T_block (ms)
-	PeakConnections  int     // C_peak
-	RecoveryTime     float64 // T_rec (ms)
-	PermanentFailure bool    // Lambda >= Mu_max
-	RiskLevel        string  // Danger, Warning, Safe
+	RiskScore        float64 // 최종 위험 점수 (%)
+	EstimatedDDLTime float64 // 예상 DDL 실행 시간 (T_ddl, ms)
+	BlockingTime     float64 // 예상 전체 블로킹 시간 (T_block, ms)
+	PeakConnections  int     // 예측되는 최대 동시 연결 수 (C_peak)
+	RecoveryTime     float64 // 예측되는 시스템 회복 시간 (T_rec, ms)
+	PermanentFailure bool    // 시스템 영구 마비(Deadlock/Overload) 여부
+	RiskLevel        string  // 최종 위험 등급 (Danger, Warning, Safe)
 
-	// v3.1 Additional Context
-	CurrentTPS    float64
-	AvgTPS1h      float64
-	PeakTPS24h    float64
-	SafeWindow    string // Recommended deployment hour (e.g., "03:00")
-	SafeWindowTPS float64
+	// 트래픽 상황 분석 (Baseline Analytics)
+	CurrentTPS    float64 // 실시간 수집된 현재 TPS
+	AvgTPS1h      float64 // 최근 1시간 평균 TPS
+	PeakTPS24h    float64 // 최근 24시간 최대 피크 TPS
+	SafeWindow    string  // 추천 배포 시간대 (예: "03:00")
+	SafeWindowTPS float64 // 추천 시간대의 예상 평균 TPS
 }
 
-// NewRiskEngine creates a new RiskEngine instance.
+// NewRiskEngine은 필요한 의존성을 주입하여 RiskEngine 인스턴스를 생성합니다.
 func NewRiskEngine(pg db.PostgresClient, sqlite db.SQLiteClient, constants RiskConstants) *RiskEngine {
 	return &RiskEngine{
 		pg:        pg,
@@ -65,149 +65,84 @@ func NewRiskEngine(pg db.PostgresClient, sqlite db.SQLiteClient, constants RiskC
 	}
 }
 
-// AnalyzeRisk performs the 5-step risk assessment for a given DDL analysis result.
-// [L-B02, L-B03] Uses SQLite baseline metrics to evaluate risk instantly.
+// AnalyzeRisk는 5단계 리스크 평가 모델을 실행하여 DDL의 안전성을 진단합니다.
 func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis parser.AnalysisResult) (*RiskAnalysisReport, error) {
 
-	// 디버그 모드인 경우 분석 대상 테이블과 작업 유형을 출력하여 분석 진행 상황을 표시
 	if e.Verbose {
-		fmt.Printf("\n[DEBUG] 🔍 Analyzing risk for table: %s (Operation: %s)\n", analysis.TableName, analysis.Operation)
+		fmt.Printf("\n[DEBUG] 🔍 리스크 분석 시작: %s (작업: %s)\n", analysis.TableName, analysis.Operation)
 	}
 
-	// 1. Get Dynamic Metrics from Postgres (Size, Conns, etc.)
-
-	// internal/db/workload.go - GetTableDynamicMetrics 메서드를 호출하여 분석 대상 테이블의 현재 크기, 활성 연결 수, P99 응답 시간, 실시간 TPS 등을 조회
-	metrics, err := e.pg.GetTableDynamicMetrics(ctx, analysis.TableName)
+	// 1. PostgreSQL 실시간 상태 정보 수집
+	metrics, err := e.pg.FetchTableDynamicMetrics(ctx, analysis.TableName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch dynamic metrics: %w", err)
+		return nil, fmt.Errorf("PostgreSQL 실시간 지표 수집 실패: %w", err)
 	}
 
-	// 디버그 모드인 경우 조회된 Postgres 지표를 출력하여 분석에 사용된 실시간 데이터 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] 🐘 Postgres Metrics: Size=%d bytes, Conns=%d, P99=%.2fms, BaselineTPS=%.2f\n",
-			metrics.TableSize, metrics.ActiveConnections, metrics.P99Time, metrics.TPS)
-	}
-
-	// 2. Initialize Risk Analysis Report
-
-	// RiskAnalysisReport 구조체를 초기화하여 분석 결과를 저장할 준비
 	report := &RiskAnalysisReport{}
 
-	// [Step 0] v3.1 Baseline Analytics & Weighted TPS
-
-	// GetTableBaselineStats 메서드를 호출하여 SQLite에 저장된 과거 데이터를 분석하여 최근 1시간 평균 및 24시간 최대 TPS를 산출
+	// 2. SQLite 기반 과거 트래픽 패턴 분석 (v3.2 Baseline Model)
 	if e.sqlite != nil {
-		// Real-time TPS (delta from last 1-min snapshots)
-		// internal/db/activity.go - GetRecentTPSDelta 메서드를 호출하여 최근 1분 간격으로 수집된 TPS 스냅샷을 기반으로 실시간 TPS 변화를 계산하여 보고서에 저장
-		realtimeTPS, _ := e.sqlite.GetRecentTPSDelta(analysis.TableName)
-		report.CurrentTPS = realtimeTPS
+		// A. 실시간 TPS (가장 최근 수집된 델타값 기반)
+		report.CurrentTPS, _ = e.sqlite.GetRecentTPSByDelta(analysis.TableName)
 
-		// Historical stats from table_metrics
-		// internal/db/activity.go - GetTableBaselineStats 메서드를 호출하여 SQLite에 저장된 과거 데이터를 분석하여 최근 1시간 평균 및 24시간 최대 TPS를 산출하여 보고서에 저장
-		baseline, _ := e.sqlite.GetTableBaselineStats(analysis.TableName)
+		// B. 과거 통계 (1시간 평균 및 24시간 피크)
+		baseline, _ := e.sqlite.GetTableBaselineStatistics(analysis.TableName)
 		if baseline != nil {
 			report.AvgTPS1h = baseline.AvgTPS_1h
 			report.PeakTPS24h = baseline.PeakTPS_24h
 		}
 
-		// Deployment Window Recommendation
-		// internal/db/activity.go - GetSafeWindow 메서드를 호출하여 SQLite에 저장된 과거 데이터를 분석하여 최근 24시간 동안 가장 트래픽이 낮았던 시간대를 찾아 안전한 배포 시간으로 추천하여 보고서에 저장
-		hour, avgTPS, _ := e.sqlite.GetSafeWindow()
-		report.SafeWindow = hour
-		report.SafeWindowTPS = avgTPS
+		// C. 최적의 배포 윈도우 추천
+		report.SafeWindow, report.SafeWindowTPS, _ = e.sqlite.IdentifySafestDeploymentWindow()
 
-		// [L34] Multi-Weighted TPS Calculation (Conservative Approach)
-		// Lambda = Max(Current, Avg_1h * 1.2, Peak_24h * 0.8)
-		// 실시간 TPS, 최근 1시간 평균 TPS의 20% 증가값, 24시간 최대 TPS의 20% 감소값 중 가장 높은 값을 최종 Lambda로 사용하여 위험 분석에 반영
+		// [Lambda 산출] 보수적 접근을 위해 현재, 평균(+20%), 피크(-20%) 중 최대값을 기준 트래픽으로 선정
 		metrics.TPS = math.Max(report.CurrentTPS, math.Max(report.AvgTPS1h*1.2, report.PeakTPS24h*0.8))
 
-		// 디버그 모드인 경우 SQLite에서 조회된 지표와 최종 Lambda 값을 출력하여 분석에 사용된 트래픽 데이터와 가중치 적용 결과 확인
 		if e.Verbose {
-			fmt.Printf("[DEBUG] 📡 SQLite Analytics: Current=%.1f, Avg_1h=%.1f, Peak_24h=%.1f -> Final Lambda=%.2f TPS\n",
+			fmt.Printf("[DEBUG] 📡 트래픽 분석 결과: 현재=%.1f, 평균=%.1f, 피크=%.1f -> 분석 기준 Lambda=%.2f TPS\n",
 				report.CurrentTPS, report.AvgTPS1h, report.PeakTPS24h, metrics.TPS)
 		}
 	}
 
-	// [Step 1] Estimated DDL Time (T_ddl)
-
-	// 분석 결과의 RewriteRequired 필드 값에 따라 DDL 작업이 테이블 재작성(예: ALTER TABLE)으로 인해 긴 다운타임이 예상되는지 여부를 판단
-	// 테이블 재작성 작업인 경우, 테이블 크기와 Disk_IO 상수를 기반으로 DDL 작업에 필요한 시간을 밀리초 단위로 계산하여 보고서에 저장
-	// 테이블 재작성 작업이 아닌 경우, T_meta 상수값을 DDL 시간으로 사용하여 보고서에 저장
+	// [Step 1] 예상 DDL 실행 시간 (T_ddl)
+	// 테이블 재작성(Full Rewrite) 여부에 따라 실행 시간 예측 방식 차별화
 	if analysis.RewriteRequired {
+		// 테이블 크기 / 디스크 I/O 속도 기반 예측
 		report.EstimatedDDLTime = (float64(metrics.TableSize) / float64(e.constants.DiskIO)) * 1000.0
 	} else {
+		// 단순 메타데이터 변경 시간 적용
 		report.EstimatedDDLTime = e.constants.TMeta
 	}
 
-	// 디버그 모드인 경우 DDL 시간 계산에 사용된 테이블 크기, Disk_IO 상수, T_meta 상수, 그리고 최종 계산된 T_ddl 값을 출력하여 분석에 사용된 데이터와 계산 결과 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] ⚙️ Step 1 (T_ddl): %.2f ms (RewriteRequired: %v, DiskIO: %d)\n",
-			report.EstimatedDDLTime, analysis.RewriteRequired, e.constants.DiskIO)
-	}
-
-	// [Step 2] Total Blocking Time (T_block)
-	// T_block = P99 + T_ddl + (ReplicationLag * 1000)
-	// 분석 대상 테이블의 P99 응답 시간, 계산된 DDL 시간, 그리고 Replication Lag을 기반으로 총 예상 블로킹 시간을 밀리초 단위로 계산하여 보고서에 저장
-	// Replication Lag은 초 단위로 제공되므로 밀리초로 변환하여 계산에 사용
+	// [Step 2] 총 예상 블로킹 시간 (T_block)
+	// T_block = P99 응답 시간 + DDL 실행 시간 + 복제 지연 시간
 	report.BlockingTime = metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)
 
-	// 디버그 모드인 경우 T_block 계산에 사용된 P99 시간, DDL 시간, Replication Lag, 그리고 최종 계산된 T_block 값을 출력하여 분석에 사용된 데이터와 계산 결과 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] ⚙️ Step 2 (T_block): %.2f ms (P99: %.1f, Lag: %.1f)\n",
-			report.BlockingTime, metrics.P99Time, metrics.ReplicationLag)
-	}
-
-	// [Step 3] Peak Connections (C_peak)
-	// LambdaPerMs = TPS / 1000
-	// 분석 대상 테이블의 실시간 TPS를 기반으로 초당 트랜잭션 수를 밀리초 단위로 변환하여 LambdaPerMs를 계산
-	// C_peak = ActiveConnections + (LambdaPerMs * T_block)
-	// 현재 활성 연결 수에 LambdaPerMs와 T_block을 곱한 값을 더하여 DDL 작업 중 예상되는 최대 연결 수를 계산하여 보고서에 저장
+	// [Step 3] 예측 최대 동시 연결 수 (C_peak)
+	// DDL 수행 중 대기하게 될 신규 요청 수(Lambda * T_block) + 기존 활성 연결 수
 	lambdaPerMs := metrics.TPS / 1000.0
 	report.PeakConnections = metrics.ActiveConnections + int(lambdaPerMs*report.BlockingTime)
 
-	// 디버그 모드인 경우 C_peak 계산에 사용된 활성 연결 수, LambdaPerMs, T_block, 그리고 최종 계산된 C_peak 값을 출력하여 분석에 사용된 데이터와 계산 결과 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] ⚙️ Step 3 (C_peak): %d (Active: %d, Incoming during block: %.2f)\n",
-			report.PeakConnections, metrics.ActiveConnections, lambdaPerMs*report.BlockingTime)
-	}
-
-	// [Step 4] Recovery Time (T_rec)
-	// Lambda >= Mu_max인 경우, 시스템이 영구적으로 과부하 상태에 빠질 것으로 간주하여 T_rec을 무한대로 설정하고 PermanentFailure 플래그를 true로 설정
-	// Lambda < Mu_max인 경우, C_peak가 C_max를 초과하는지 여부에 따라 T_rec을 계산
-	// C_peak > C_max인 경우, T_rec = (C_peak - C_max) / ((Mu_max - Lambda) / 1000)
-	// C_peak <= C_max인 경우, T_rec = 0 (즉시 회복 가능)
-	// 계산된 T_rec 값을 보고서에 저장
+	// [Step 4] 예측 시스템 회복 시간 (T_rec)
+	// 쌓인 요청(C_peak - C_max)을 시스템 여유 대역폭(Mu_max - Lambda)으로 처리하는 데 걸리는 시간
 	if metrics.TPS >= e.constants.MuMax {
+		// 유입 트래픽이 시스템 한계를 넘어서면 영구 마비로 간주
 		report.PermanentFailure = true
 		report.RecoveryTime = math.Inf(1)
 	} else {
-		recoveryNumerator := float64(report.PeakConnections - e.constants.CMax)
-		recoveryDenominator := (e.constants.MuMax - metrics.TPS) / 1000.0 // per ms
-		if recoveryNumerator > 0 {
-			report.RecoveryTime = recoveryNumerator / recoveryDenominator
+		excessiveConns := float64(report.PeakConnections - e.constants.CMax)
+		recoveryRatePerMs := (e.constants.MuMax - metrics.TPS) / 1000.0 
+		if excessiveConns > 0 {
+			report.RecoveryTime = excessiveConns / recoveryRatePerMs
 		} else {
 			report.RecoveryTime = 0
 		}
 	}
 
-	// 디버그 모드인 경우 T_rec 계산에 사용된 Lambda, Mu_max, C_peak, C_max, 그리고 최종 계산된 T_rec 값을 출력하여 분석에 사용된 데이터와 계산 결과 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] ⚙️ Step 4 (T_rec): %.2f ms (MuMax: %.1f, RecoveryNeeded: %v)\n",
-			report.RecoveryTime, e.constants.MuMax, report.PeakConnections > e.constants.CMax)
-	}
-
-	// [Step 5] Risk Score Calculation
-	// Risk Score는 C_peak가 C_max를 초과하는 정도에 따라 계산
-	// Risk Score = (C_peak / C_max) * 100, 단 C_peak가 C_max를 초과하는 경우에만 계산, 그렇지 않으면 0으로 설정
+	// [Step 5] 최종 리스크 점수 및 등급 산출
+	// 최대 연결 수(C_peak)가 시스템 한계(C_max)를 얼마나 위협하는지를 백분율로 산출
 	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
 
-	// 디버그 모드인 경우 Risk Score 계산에 사용된 C_peak, C_max, 그리고 최종 계산된 Risk Score 값을 출력하여 분석에 사용된 데이터와 계산 결과 확인
-	if e.Verbose {
-		fmt.Printf("[DEBUG] ⚙️ Step 5 (RiskScore): %.2f%% (C_max: %d)\n", report.RiskScore, e.constants.CMax)
-	}
-
-	// Risk Level Classification
-	// Risk Score와 PermanentFailure 플래그를 기반으로 위험 수준을 분류하여 보고서에 저장
 	if report.RiskScore >= 90.0 || report.PermanentFailure {
 		report.RiskLevel = "Danger"
 	} else if report.RiskScore >= 60.0 {
