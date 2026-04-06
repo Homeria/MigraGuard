@@ -7,11 +7,12 @@ import (
 
 // GetRecentTPSByDelta는 저장된 델타 스냅샷을 기반으로 특정 테이블의 최근 실질 TPS를 계산합니다.
 func (a *SQLiteAdapter) GetRecentTPSByDelta(tableName string) (float64, error) {
+	// 대소문자 구분 없이 테이블명이 포함된 모든 쿼리의 호출 합계를 구합니다.
 	query := `
 		WITH recent_delta AS (
 			SELECT timestamp, SUM(calls) as delta_calls
 			FROM workload_snapshots
-			WHERE query LIKE ?
+			WHERE LOWER(query) LIKE LOWER(?)
 			GROUP BY timestamp
 			ORDER BY timestamp DESC
 			LIMIT 2

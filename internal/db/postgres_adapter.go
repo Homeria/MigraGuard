@@ -95,10 +95,11 @@ func (a *PostgresAdapter) FetchTableDynamicMetrics(ctx context.Context, tableNam
 	}
 
 	// 4. pg_stat_statements 기반의 P99 응답 시간 및 근사치 TPS 계산
+	// Postgres 14+ 버전에서는 stats_reset 정보가 pg_stat_statements_info 뷰에 있습니다.
 	statsQuery := `
 		SELECT 
 			PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY max_exec_time) as p99_time,
-			SUM(calls) / GREATEST(EXTRACT(EPOCH FROM (now() - min(stats_reset))), 1) as tps
+			SUM(calls) / GREATEST(EXTRACT(EPOCH FROM (now() - (SELECT stats_reset FROM pg_stat_statements_info))), 1) as tps
 		FROM pg_stat_statements
 		WHERE query LIKE '%' || $1 || '%';
 	`

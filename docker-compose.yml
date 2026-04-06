@@ -26,9 +26,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10"]
+    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10", "--tables", "orders,products,users"]
     volumes:
       - migraguard-data:/app/data
+    restart: always
+
+  # 🧪 Load Generator (실서비스 트래픽 시뮬레이터)
+  # 24시간 트래픽 곡선을 흉내 내며 비즈니스 시나리오 부하를 생성합니다.
+  load-generator:
+    build: .
+    entrypoint: ["/app/migraguard", "loadgen", "--db", "postgres://user:pass@db:5432/target_db", "--conns", "25", "--profile", "flash-sale"]
+    depends_on:
+      db:
+        condition: service_healthy
     restart: always
 
   # 🔍 MigraGuard Analyze (Test Runner)

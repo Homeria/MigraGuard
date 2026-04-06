@@ -1,53 +1,43 @@
-# ⚙️ MigraGuard v3.3 Implementation Details
+# ⚙️ MigraGuard v3.4 Implementation Details
 
-본 문서는 v3.3에서 달성한 **정밀 데이터 수집 로직**과 **모듈화된 DB 레이어**의 상세 구현 명세를 다룹니다.
-
----
-
-## 1. Modular DB Layer (`internal/db/`)
-
-데이터 계층의 응집도를 높이고 결합도를 낮추기 위해 다음과 같이 모듈화되었습니다.
-
-- **`models.go`**: `WorkloadSnapshot`, `TableDynamicMetrics` 등 시스템 전반에서 사용하는 도메인 모델 정의.
-- **`postgres_adapter.go`**: PostgreSQL에서 누적 통계치와 실시간 테이블 지표(Size, Lag 등)를 읽어오는 전용 어댑터.
-- **`sqlite_adapter.go`**: SQLite 연결 관리, 스키마 초기화, 데이터 보존 정책(Purge) 등 기초 인프라 관리.
-- **`sqlite_repository.go`**: 수집기 전용. 델타 스냅샷 기록 및 차이값 계산을 위한 원본(Original) 데이터 동기화 담당.
-- **`sqlite_analyzer.go`**: 분석기 전용. 리스크 엔진이 필요로 하는 통계 분석 쿼리(Baseline, TPS 등) 수행.
-
-## 2. Background Collector Delta Engine (`internal/db/collector.go`)
-
-- **Objective:** `pg_stat_statements`의 누적치로부터 수집 주기 사이의 실제 부하량(Delta)을 정밀하게 추출.
-- **Delta Computation Logic:**
-  1. **Fetch:** PostgreSQL로부터 현재 누적 스냅샷(`Current`)을 가져옴.
-  2. **Lookup:** SQLite의 `original_pg_stat_statements`에서 이전 수집 시점의 누적치(`Previous`)를 조회.
-  3. **Compute:** $\Delta = Current - Previous$.
-  4. **Exception Handling:** 만약 $\Delta < 0$ (DB 통계 초기화 시)이라면 현재값(`Current`)을 그대로 델타로 채택.
-  5. **Synchronize:** 다음 주기를 위해 현재값(`Current`)을 `original_pg_stat_statements`에 UPSERT.
-  6. **Record:** 최종 계산된 $\Delta$를 `workload_snapshots`에 시계열 데이터로 저장.
-
-## 3. High-Fidelity Service Simulation (`internal/simulation/` - v3.4 예정)
-
-- **Objective:** `pgbench`의 한계를 넘어 실제 비즈니스 트래픽과 유사한 환경에서 리스크 엔진을 검증.
-- **Simulation Strategy:**
-  - **Worker Pool Architecture**: 여러 워커가 비동기적으로 DB 요청 수행.
-  - **Query Mix Profile**: SELECT 80%, INSERT 15%, UPDATE 5% 등 비즈니스 시나리오별 쿼리 비율 설정.
-  - **Dynamic TPS Control**: 설정된 프로파일에 따라 트래픽을 선형 또는 폭발적으로 증가시켜 리스크 점수 변화 유도.
-
-## 4. Risk Evaluation Engine (`internal/engine/risk.go`)
-
-- **Weighted Lambda ($\lambda_{final}$):**
-  - $\lambda_{final} = \max(\lambda_{curr}, \lambda_{avg\_1h} \times 1.2, \lambda_{peak\_24h} \times 0.8)$.
-  - 구간별 델타 데이터를 기반으로 하므로 $\lambda_{curr}$의 신뢰도가 v3.2 대비 비약적으로 상승.
-- **Gatekeeping Logic:**
-  - 분석 결과 `RiskScore >= 90%` 또는 `PermanentFailure` 감지 시 즉시 `Danger` 등급 부여 및 파이프라인 차단 시그널 송출.
+본 문서는 v3.4에서 구현된 **고충실도 부하 생성기**와 **리스크 엔진 최적화**의 상세 기술 명세를 다룹니다.
 
 ---
 
-## Technical Summary: The Refined Data Journey
-1. **Agent**가 **Postgres**에서 누적치를 읽어 **SQLite**의 이전 상태와 비교 후 **Delta**만 저장.
-2. **Analyze**가 SQL 파일을 파싱하여 변경 대상을 식별.
-3. **Risk Engine**이 **SQLite**의 델타 이력과 PostgreSQL의 실시간 지표를 결합하여 최종 점수 산출.
-4. **Load Generator**가 다양한 부하 상황을 연출하여 위 과정의 실효성을 반복 검증.
+## 1. Load Generator Engine (`internal/simulation/`)
+
+- **Objective:** 실제 이커머스 서비스의 트래픽 패턴을 모사하여 DB 락 경합 및 성능 저하 상황을 재현.
+- **Worker Pool Architecture:**
+  - `Concurrency` 설정에 따른 다중 고루틴 워커 할당.
+  - 각 워커는 독립적인 세션으로 DB 요청을 수행하여 동시성 극대화.
+- **24-Hour Traffic Curve (Sine Wave):**
+  - $\text{Intensity} = \frac{\sin(\frac{\pi \times (\text{hour}-9)}{12}) + 1.5}{2.5}$
+  - 현재 시스템 시간을 기반으로 부하 강도를 0.2 ~ 1.0 사이로 자동 조절하여 현실적인 일간 트래픽 곡선 생성.
+- **Business Scenarios:**
+  - **Browse**: 사용자 및 상품 목록 조회 (SELECT 중심).
+  - **Order**: 주문 생성, 상세 기록, 상품 재고 차감을 포함한 트랜잭션 수행 (쓰기 및 락 경합 중심).
+
+## 2. Risk Evaluation Sensitivity Tuning
+
+- **Dynamic Thresholding:** 
+  - 테스트 환경 실증을 위해 `CMax`(시스템 최대 허용 연결 수)를 하향 조정(예: 100)하여 민감한 위험 탐지 보장.
+- **Conservative Weighting:**
+  - 리스크 점수 산출 시 $\max(\text{Current}, \text{Avg}_{1h} \times 1.2, \text{Peak}_{24h} \times 0.8)$를 적용하여 불확실성이 높은 상황에서 안전하게 배포 차단.
+
+## 3. PostgreSQL Compatibility (`internal/db/postgres_adapter.go`)
+
+- **PG 14+ Stats Support:**
+  - `pg_stat_statements`에서 삭제된 `stats_reset` 컬럼 대신 `pg_stat_statements_info` 뷰를 참조하도록 TPS 계산 쿼리 개선.
+- **Case-Insensitive Table Matching:**
+  - 쿼리 텍스트 매칭 시 대소문자 구분을 없애 실시간 지표 수집의 누락 방지.
 
 ---
-*Last Updated: 2026-04-06 (v3.3 Update)*
+
+## Technical Summary: Simulation Workflow
+1. **Load Generator**가 설정된 프로파일에 따라 `orders` 테이블 등에 지속적인 트랜잭션 부하 유발.
+2. **Agent**가 PostgreSQL 15의 통계 뷰를 분석하여 테이블별 정밀 지표 수집.
+3. **Analyze CLI**가 수집된 지표를 바탕으로 현재 트래픽이 DDL 배포에 미칠 악영향을 수치화.
+4. 10만 건 이상의 대형 테이블 변경 시 **Danger** 등급을 부여하여 실제 서비스 장애 예방 능력 검증.
+
+---
+*Last Updated: 2026-04-06 (v3.4 Simulation Detail)*
