@@ -1,6 +1,6 @@
 services:
   # 🐘 Target Database (PostgreSQL)
-  # This represents the production DB being monitored.
+  # 이커머스 시뮬레이션을 위한 운영 DB를 모사합니다.
   db:
     image: postgres:15-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
@@ -20,7 +20,7 @@ services:
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
 
   # 🛡️ MigraGuard Agent (Background Metrics Collector)
-  # Continuously collects metrics from 'db' and saves them to SQLite in 'data-volume'.
+  # 주기적으로 DB 지표를 수집하여 공유 SQLite에 저장합니다.
   agent:
     build: .
     depends_on:
@@ -35,21 +35,20 @@ services:
   # 24시간 트래픽 곡선을 흉내 내며 비즈니스 시나리오 부하를 생성합니다.
   load-generator:
     build: .
-    entrypoint: ["/app/migraguard", "loadgen", "--db", "postgres://user:pass@db:5432/target_db", "--conns", "25", "--profile", "flash-sale"]
+    entrypoint: ["/app/migraguard", "loadgen", "--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
     depends_on:
       db:
         condition: service_healthy
     restart: always
 
   # 🔍 MigraGuard Analyze (Test Runner)
-  # This can be used to manually trigger analysis by attaching to this container or using 'docker compose run'.
-  # It shares the SAME volume as the agent to see the metrics.
+  # 수동으로 리스크 분석을 실행하기 위한 쉘 환경입니다.
   analyze-shell:
     build: .
     volumes:
       - migraguard-data:/app/data
       - .:/app/code
-    command: ["tail", "-f", "/dev/null"] # Keep it alive for manual testing
+    command: ["tail", "-f", "/dev/null"]
 
 volumes:
   migraguard-data:

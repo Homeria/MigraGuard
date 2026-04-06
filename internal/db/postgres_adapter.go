@@ -8,7 +8,6 @@ import (
 )
 
 // FetchCurrentWorkloadSnapshot은 pg_stat_statements에서 현재의 누적 통계 데이터를 가져옵니다.
-// 이 데이터는 나중에 Delta(차이값) 계산을 위한 기반 데이터로 사용됩니다.
 func (a *PostgresAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]WorkloadSnapshot, error) {
 	if a.pool == nil {
 		return nil, errors.ErrDatabaseConn
@@ -59,7 +58,6 @@ func (a *PostgresAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]W
 }
 
 // FetchTableDynamicMetrics는 분석 엔진(Risk Engine)이 필요한 실시간 지표들을 수집합니다.
-// 테이블 크기, 복제 지연, 활성 연결 수, P99 실행 시간 등을 한 번에 조회합니다.
 func (a *PostgresAdapter) FetchTableDynamicMetrics(ctx context.Context, tableName string) (*TableDynamicMetrics, error) {
 	if a.pool == nil {
 		return nil, errors.ErrDatabaseConn
@@ -73,7 +71,7 @@ func (a *PostgresAdapter) FetchTableDynamicMetrics(ctx context.Context, tableNam
 		return nil, errors.WrapWithTable(err, "FetchTableDynamicMetrics", tableName, "테이블 크기 조회 실패")
 	}
 
-	// 2. 현재 복제 지연(Replication Lag) 상태 확인 (Replica 환경용)
+	// 2. 현재 복제 지연(Replication Lag) 상태 확인
 	lagQuery := `
 		SELECT COALESCE(EXTRACT(EPOCH FROM (now() - reply_time)), 0)
 		FROM pg_stat_replication
@@ -94,8 +92,7 @@ func (a *PostgresAdapter) FetchTableDynamicMetrics(ctx context.Context, tableNam
 		return nil, errors.WrapWithTable(err, "FetchTableDynamicMetrics", tableName, "활성 연결 수 조회 실패")
 	}
 
-	// 4. pg_stat_statements 기반의 P99 응답 시간 및 근사치 TPS 계산
-	// Postgres 14+ 버전에서는 stats_reset 정보가 pg_stat_statements_info 뷰에 있습니다.
+	// 4. pg_stat_statements 기반의 P99 응답 시간 및 근사치 TPS 계산 (PG 14+ 호환)
 	statsQuery := `
 		SELECT 
 			PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY max_exec_time) as p99_time,
@@ -114,7 +111,6 @@ func (a *PostgresAdapter) CheckTableSchemaPresence(ctx context.Context, tableNam
 		return errors.ErrDatabaseConn
 	}
 
-	// 1. 테이블 존재 여부 확인
 	var tableExists bool
 	tableQuery := `
 		SELECT EXISTS (
@@ -130,7 +126,6 @@ func (a *PostgresAdapter) CheckTableSchemaPresence(ctx context.Context, tableNam
 		return errors.ErrTableNotFound
 	}
 
-	// 2. 컬럼이 명시된 경우 각 컬럼의 존재 여부 순차 확인
 	if len(columns) > 0 {
 		for _, col := range columns {
 			var colExists bool
