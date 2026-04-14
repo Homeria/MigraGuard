@@ -131,16 +131,30 @@ steps:
 
 ---
 
-## 📚 문서 및 상세 설계 (Documentation)
+## 🧪 테스트 환경 구축 (Testing)
 
-MigraGuard는 캡스톤 디자인의 공학적 설계 원칙에 따라 체계적으로 문서화되어 있습니다. 모든 문서는 `docs/` 디렉토리에서 확인할 수 있습니다.
+MigraGuard의 리스크 분석을 정확히 테스트하기 위해서는 `pg_stat_statements`가 활성화된 PostgreSQL이 필요합니다.
 
-- **[요구사항 정의서]** [`docs/01_requirements/user_stories.md`](docs/01_requirements/user_stories.md)
-- **[시스템 아키텍처]** [`docs/02_architecture/system_overview.md`](docs/02_architecture/system_overview.md)
-  - **[핵심 설계도]** [`docs/02_architecture/uml_diagrams/05_holistic_implementation_map.md`](docs/02_architecture/uml_diagrams/05_holistic_implementation_map.md)
-- **[구현 상세 명세]** [`docs/03_implementation/parser_logic.md`](docs/03_implementation/parser_logic.md)
-- **[운용 및 시뮬레이션 가이드]** [`docs/04_guides/simulation_manual.md`](docs/04_guides/simulation_manual.md)
-- **[형상 관리 전략]** [`docs/05_project_process/branch_strategy.md`](docs/05_project_process/branch_strategy.md)
+### 1. PostgreSQL 설정
+`postgresql.conf` 파일에 아래 설정을 추가하거나, Docker 실행 시 옵션을 부여합니다.
+```bash
+# Docker 실행 예시
+docker run -d --name mg-db -e POSTGRES_PASSWORD=pass -p 5432:5432 postgres:15-alpine -c shared_preload_libraries=pg_stat_statements
+```
+
+접속 후 확장을 생성합니다.
+```sql
+CREATE EXTENSION pg_stat_statements;
+```
+
+### 2. 시나리오 테스트 케이스
+`migrations/` 폴더 내의 테스트 케이스를 사용하여 분석 엔진의 반응을 확인하세요.
+
+| 리스크 | SQL 파일 | 설명 |
+| :--- | :--- | :--- |
+| **Safe** | `001_safe_set_default.sql` | 단순 기본값 설정 (Metadata only) |
+| **Warning** | `002_warning_add_index.sql` | 인덱스 생성 (Lock competition) |
+| **Danger** | `003_danger_rewrite_type.sql` | 컬럼 타입 변경 (Table Rewrite) |
 
 ---
 
