@@ -4,29 +4,27 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Homeria/MigraGuard/internal/config"
+	"github.com/Homeria/MigraGuard/internal/infra/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
 	cfgFile      string
 	Verbose      bool
-	GlobalConfig = config.DefaultConfig()
+	GlobalConfig = &config.Config{}
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "migraguard",
 	Short: "MigraGuard - DB Migration Gatekeeper",
-	Long: `MigraGuard is a DevSecOps CLI tool that prevents lock contention
-and service outages during database schema changes (DDL) by cross-validating
-migration scripts with actual runtime traffic.`,
+	Long: `MigraGuard는 데이터베이스 스키마 변경(DDL) 시 발생할 수 있는 락 경합과 서비스 장애를
+실제 운영 트래픽 데이터를 기반으로 교차 검증하여 차단하는 DevSecOps CLI 도구입니다.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
+// Execute는 루트 명령을 실행하고 플래그를 적절히 설정합니다.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -37,30 +35,17 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Global persistent flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./migraguard.yaml)")
-	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "Enable verbose output for debugging")
+	// 전역 영속성 플래그 설정
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "설정 파일 경로 (기본값: ./migraguard.yaml)")
+	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "디버깅을 위한 상세 로그 출력 활성화")
 }
 
-// initConfig reads in config file and ENV variables if set.
+// initConfig는 설정 파일이나 환경 변수를 읽어옵니다.
 func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
+	loadedConfig, err := config.LoadConfig(cfgFile)
+	if err != nil {
+		// 설정 파일이 없는 경우 기본값 사용
 	} else {
-		// Search config in current directory with name "migraguard" (without extension).
-		viper.AddConfigPath(".")
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("migraguard")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Printf("📂 Using config file: %s\n", viper.ConfigFileUsed())
-		if err := viper.Unmarshal(GlobalConfig); err != nil {
-			fmt.Printf("⚠️ Unable to decode config into struct: %v\n", err)
-		}
+		GlobalConfig = loadedConfig
 	}
 }

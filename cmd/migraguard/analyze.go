@@ -2,15 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
-	"github.com/Homeria/MigraGuard/internal/db"
-	"github.com/Homeria/MigraGuard/internal/engine"
-	migraErrors "github.com/Homeria/MigraGuard/internal/errors"
-	"github.com/Homeria/MigraGuard/internal/reporter"
-	"github.com/Homeria/MigraGuard/internal/service"
+	"github.com/Homeria/MigraGuard/internal/analyzer"
+	"github.com/Homeria/MigraGuard/internal/app"
+	"github.com/Homeria/MigraGuard/internal/infra/postgres"
+	"github.com/Homeria/MigraGuard/internal/infra/sqlite"
+	"github.com/Homeria/MigraGuard/internal/shared/reporter"
 	"github.com/spf13/cobra"
 )
 
@@ -23,115 +22,86 @@ var (
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
-	// Analyze configuration flags with GlobalConfig defaults
-	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", GlobalConfig.Database.URL, "PostgreSQL connection string")
-	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", GlobalConfig.Database.SQLitePath, "Path to the local SQLite storage file")
-	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
+	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "대상 PostgreSQL 접속 문자열 (필수)")
+	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "./migraguard.db", "로컬 메트릭 저장소(SQLite) 경로")
+	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "결과 출력 형식 (console, markdown)")
 }
 
-// analyzeCmd represents the analyze command
 var analyzeCmd = &cobra.Command{
 	Use:   "analyze [migration_file.sql]",
-	Short: "Analyze a migration SQL file to evaluate risk instantly",
-	Long: `Parses the given DDL migration script (AST), evaluates the potential risk
-using the MigraGuard v3.1 baseline model, and reports the findings.
-This command relies on data collected by the 'migraguard agent'.`,
-	Args: cobra.ExactArgs(1),
+	Short: "마이그레이션 SQL 파일을 즉시 분석하여 위험도를 평가합니다",
+	Long:  `제공된 DDL 스크립트를 파싱하고 실시간 및 과거 트래픽 데이터를 기반으로 잠재적 장애 리스크를 수치화합니다.`,
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filePath := args[0]
 		ctx := context.Background()
 
-		// 1. Initialize Infrastructure (Adapters)
+		// 설정 파일 또는 플래그로부터 DB 주소 로드
+		if analyzeDbString == "" && GlobalConfig.Database.Postgres != "" {
+			analyzeDbString = GlobalConfig.Database.Postgres
+		}
 
-		// 타겟 DB 연결 검사
 		if analyzeDbString == "" {
-			fmt.Println("❌ Error: --db flag is required to connect to PostgreSQL.")
+			fmt.Println("❌ 에러: PostgreSQL 접속 문자열이 필요합니다. --db 플래그나 설정 파일을 확인하세요.")
 			os.Exit(1)
 		}
 
-		// 타겟 DB 연결 어댑터 초기화 및 연결 여부 검사
-		pg := db.NewPostgresAdapter(analyzeDbString)
-		if err := pg.Connect(ctx); err != nil {
-			fmt.Printf("❌ Failed to connect to PostgreSQL: %v\n", err)
+		// 1. 인프라 어댑터 초기화
+		pool, err := postgres.ConnectPostgres(ctx, analyzeDbString)
+		if err != nil {
+			fmt.Printf("❌ PostgreSQL 연결 실패: %v\n", err)
 			os.Exit(1)
 		}
+		pg := postgres.NewPostgresAdapter(pool)
 		defer pg.Close()
 
-		// 타겟 DB에 대한 지표를 저장할 SQLite DB 어댑터 초기화 여부 검사
-		sqlite, err := db.NewSQLiteAdapter(analyzeSqlitePath)
+		sl, err := sqlite.NewSQLiteAdapter(analyzeSqlitePath)
 		if err != nil {
-			fmt.Printf("❌ Failed to initialize SQLite: %v\n", err)
+			fmt.Printf("❌ SQLite 저장소 초기화 실패: %v\n", err)
 			os.Exit(1)
 		}
-		defer sqlite.Close()
+		defer sl.Close()
 
-		// 2. Initialize Domain Service
-
-		// 생성된 타겟 DB 어댑터 및 SQLite 어댑터를 서비스 레이어에 주입하여 분석 서비스 인스턴스 생성
-		svc := service.NewAnalyzeService(pg, sqlite, GlobalConfig.Engine, Verbose)
-
-		if analyzeOutput == "console" {
-			fmt.Printf("🔍 Starting instant risk analysis for: %s\n", filePath)
-			fmt.Println("📡 Fetching baseline metrics from SQLite...")
+		// 2. 리스크 분석 서비스 기동
+		constants := analyzer.RiskConstants{
+			DiskIO:   GlobalConfig.Risk.DiskIO,
+			MuMax:    GlobalConfig.Risk.MuMax,
+			CMax:     GlobalConfig.Risk.CMax,
+			TTimeout: GlobalConfig.Risk.TTimeout,
+			TMeta:    GlobalConfig.Risk.TMeta,
+		}
+		if constants.CMax == 0 {
+			constants = analyzer.DefaultRiskConstants()
 		}
 
-		// 3. Execute Analysis
+		svc := app.NewAnalyzeService(pg, sl, constants, Verbose)
 
-		// 서비스 레이어의 Run 메서드를 호출하여 분석 실행, 파라미터로 분석할 SQL 파일 경로 전달
-		resp, err := svc.Run(ctx, service.AnalysisTask{SQLPath: filePath})
+		// 3. 분석 실행
+		resp, err := svc.Run(ctx, app.AnalysisTask{SQLPath: filePath})
 		if err != nil {
-			handleAnalysisError(err)
+			fmt.Printf("❌ 분석 실패: %v\n", err)
 			os.Exit(1)
 		}
 
-		// 4. Handle Output (Presentation Layer)
-		// 서비스 레이어에서 반환된 분석 결과를 사용자가 선택한 출력 형식에 맞게 포맷팅하여 출력
+		// 4. 결과 리포팅
 		var rpt reporter.Reporter
-		switch analyzeOutput {
-		case "markdown":
+		if analyzeOutput == "markdown" {
 			rpt = reporter.NewMarkdownReporter()
-		default:
+		} else {
 			rpt = reporter.NewConsoleReporter()
 		}
 
-		// 분석 결과를 선택한 리포터로 출력, 리포터의 Write 메서드에 분석 결과와 보고서 전달
 		if err := rpt.Write(resp.Results, resp.Reports); err != nil {
-			fmt.Printf("❌ Reporting Failed: %v\n", err)
+			fmt.Printf("❌ 리포트 생성 실패: %v\n", err)
 			os.Exit(1)
 		}
 
-		// 5. Final Gatekeeping (Exit Code 1 for Danger)
-		// 분석 결과 보고서에서 위험 수준이 "Danger"인 항목이 있는지 검사하여, 위험이 감지된 경우 사용자에게 경고 메시지를 출력하고 프로세스를 종료
-		if hasDanger(resp.Reports) {
-			if analyzeOutput == "console" {
-				fmt.Println("🛑 Danger detected! Migration blocked.")
+		// 5. 게이트키핑 (Danger 감지 시 종료 코드 1 반환)
+		for _, r := range resp.Reports {
+			if r.RiskLevel == "Danger" {
+				fmt.Println("\n🛑 위험: 고위험 마이그레이션이 감지되었습니다. 배포 파이프라인을 차단합니다.")
+				os.Exit(1)
 			}
-			os.Exit(1)
-		} else if analyzeOutput == "console" {
-			fmt.Println("✅ Analysis complete. No critical risks found.")
 		}
 	},
-}
-
-// handleAnalysisError provides user-friendly error messages.
-func handleAnalysisError(err error) {
-	if errors.Is(err, migraErrors.ErrInvalidSQL) {
-		fmt.Println("⚠️  No valid DDL operations found in the provided SQL file.")
-	} else if errors.Is(err, migraErrors.ErrTableNotFound) {
-		fmt.Println("❌  Error: The target table(s) could not be found in the database.")
-	} else if errors.Is(err, migraErrors.ErrDatabaseConn) {
-		fmt.Println("❌  Error: Database connection lost or failed.")
-	} else {
-		fmt.Printf("❌ Analysis Failed: %v\n", err)
-	}
-}
-
-// hasDanger checks if any report indicates a Danger level.
-func hasDanger(reports []*engine.RiskAnalysisReport) bool {
-	for _, r := range reports {
-		if r.RiskLevel == "Danger" {
-			return true
-		}
-	}
-	return false
 }
