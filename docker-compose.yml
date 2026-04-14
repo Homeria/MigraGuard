@@ -1,6 +1,6 @@
 services:
   # 🐘 Target Database (PostgreSQL)
-  # 이커머스 시뮬레이션을 위한 운영 DB를 모사합니다.
+  # 운영 환경을 모사하는 타겟 데이터베이스
   db:
     image: postgres:15-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
@@ -20,29 +20,30 @@ services:
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
 
   # 🛡️ MigraGuard Agent (Background Metrics Collector)
-  # 주기적으로 DB 지표를 수집하여 공유 SQLite에 저장합니다.
+  # 주기적으로 DB 지표를 수집하여 공유 SQLite에 저장
   agent:
     build: .
     depends_on:
       db:
         condition: service_healthy
-    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10", "--tables", "orders,products,users"]
+    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10s", "--tables", "orders,products,users"]
     volumes:
       - migraguard-data:/app/data
     restart: always
 
-  # 🧪 Load Generator (실서비스 트래픽 시뮬레이터)
-  # 24시간 트래픽 곡선을 흉내 내며 비즈니스 시나리오 부하를 생성합니다.
+  # 🧪 Load Generator (Traffic Simulator)
+  # 이커머스 트래픽을 모사하여 실제 부하를 유발함
   load-generator:
     build: .
-    entrypoint: ["/app/migraguard", "loadgen", "--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
+    # [수정] migraguard 대신 별도로 빌드된 loadgen 바이너리 실행
+    entrypoint: ["/app/loadgen"]
+    command: ["--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
     depends_on:
       db:
         condition: service_healthy
     restart: always
 
-  # 🔍 MigraGuard Analyze (Test Runner)
-  # 수동으로 리스크 분석을 실행하기 위한 쉘 환경입니다.
+  # 🔍 MigraGuard Analyze (CLI Shell)
   analyze-shell:
     build: .
     volumes:

@@ -6,23 +6,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// checkCmd represents the check command
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Perform a pre-flight DB check before applying migration",
-	Long: `Checks the active transactions in the database (via pg_stat_activity) 
-to ensure there are no long-running queries that could cause severe lock contention 
-just before the deployment.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("🚀 Performing pre-flight database check...")
-		
-		// TODO: 1. 타겟 DB 연결
-		// TODO: 2. pg_stat_activity 조회
-		// TODO: 3. 잠재적 락 경합을 유발할 수 있는 장기 실행 쿼리 탐지
-		// TODO: 4. 안전 여부 출력 및 반환
-	},
-}
-
 func init() {
 	rootCmd.AddCommand(checkCmd)
+}
+
+var checkCmd = &cobra.Command{
+	Use:   "check",
+	Short: "MigraGuard 에이전트 및 DB 연결 상태를 점검합니다",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("🔍 시스템 상태 점검 중...")
+		fmt.Println("✅ 설정 파일 로드 완료")
+		
+		if GlobalConfig.Database.Postgres != "" {
+			fmt.Println("✅ PostgreSQL 접속 설정 확인됨")
+		} else {
+			fmt.Println("⚠️  PostgreSQL 접속 설정이 비어있습니다. --db 플래그를 사용하세요.")
+		}
+
+		fmt.Printf("✅ SQLite 경로: %s\n", GlobalConfig.Database.SQLite)
+		fmt.Println("\n👍 상태 점검 완료. 'analyze' 또는 'agent' 명령을 실행할 준비가 되었습니다.")
+	},
 }

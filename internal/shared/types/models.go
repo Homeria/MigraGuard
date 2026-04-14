@@ -1,10 +1,10 @@
-package db
+package types
 
 import (
 	"time"
 )
 
-// WorkloadSnapshot은 특정 시점의 데이터베이스 쿼리 실행 통계를 나타냅니다.
+// WorkloadSnapshot은 특정 시점의 데이터베이스 쿼리 실행 통계를 담는 구조체입니다.
 // pg_stat_statements에서 수집된 데이터를 기반으로 합니다.
 type WorkloadSnapshot struct {
 	Timestamp      time.Time `json:"timestamp"`        // 수집 시점
@@ -12,7 +12,7 @@ type WorkloadSnapshot struct {
 	Query          string    `json:"query"`            // 정규화된 쿼리 텍스트
 	Calls          int64     `json:"calls"`            // 실행 횟수 (Delta 또는 Cumulative)
 	TotalTime      float64   `json:"total_time"`       // 총 실행 시간 (ms)
-	Rows           int64     `json:"rows"`             // 처리된 총 행 수
+	Rows           int64     `json:"rows"`             // 처리된 행(Row) 수
 	SharedBlksHit  int64     `json:"shared_blks_hit"`  // 공유 버퍼 히트 수
 	SharedBlksRead int64     `json:"shared_blks_read"` // 공유 버퍼 읽기 수
 }
@@ -29,8 +29,17 @@ type TableDynamicMetrics struct {
 }
 
 // BaselineStats는 분석 대상 테이블의 과거 트래픽 통계 정보를 담고 있습니다.
-// 현재 트래픽이 평소(평균)나 최악(피크) 대비 어느 정도인지 비교할 때 사용합니다.
+// 현재 트래픽이 최소(평균) 또는 최악(피크) 대비 어느 정도인지 비교할 때 사용합니다.
 type BaselineStats struct {
 	AvgTPS_1h   float64 // 최근 1시간 평균 TPS
 	PeakTPS_24h float64 // 최근 24시간 최대 피크 TPS
+}
+
+// TopQueryInfo는 DB 부하를 많이 점유하고 있는 개별 쿼리의 요약 정보입니다.
+type TopQueryInfo struct {
+	QueryID   int64   `json:"query_id"`
+	QueryText string  `json:"query_text"`
+	Calls     int64   `json:"calls"`
+	TotalTime float64 `json:"total_time"`
+	Impact    float64 `json:"impact"` // 전체 대비 점유율 (%)
 }
