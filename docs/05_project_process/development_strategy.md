@@ -20,15 +20,15 @@ MigraGuard는 단순한 SQL 린터(Linter)가 아닙니다.
 
 학부생 수준의 현실적 제약 내에서 최대의 효과를 내기 위해 **'논리적 루프 완성'**에 집중합니다.
 
-### Phase 0: 정적 분석 엔진의 전면 개편 (Core Analyzer Overhaul)
-현재 `ALTER TABLE`에만 국한된 분석 범위를 PG 전체 DDL로 확장하고, Lock 메커니즘을 데이터화합니다.
-- **핵심 과제**: 
-    - **AST 필터링 해제**: `ParseSQL` 로직을 수정하여 `CREATE INDEX`, `DROP`, `TRUNCATE` 등 모든 DDL 노드 수용.
-    - **Lock Level 정량화**: PostgreSQL 공식 문서를 기반으로 각 DDL 명령별 Lock 레벨(1~8) 매핑 테이블 구축.
-    - **정밀 리스크 연동**: Lock 레벨이 높을수록(예: Level 8 Access Exclusive) 블로킹 가중치를 부여하도록 수식 보정.
-- **기대 효과**: "모든 DDL에 대해 정확한 Lock 위험도를 예측하는 국내 유일의 오픈소스 가드"라는 타이틀 확보.
+### Phase 0: 정적 분석 엔진의 전면 개편 (Completed ✅)
+PostgreSQL의 모든 DDL을 수용하고 Lock 메커니즘을 데이터화하는 작업을 완료했습니다.
+- **핵심 성과**: 
+    - **AST 필터링 해제**: `ALTER`, `CREATE INDEX`, `DROP`, `TRUNCATE`, `RENAME` 완벽 지원.
+    - **Lock Level 정량화**: 8단계 Lock 매트릭스를 기반으로 블로킹 가중치 적용.
+    - **최적화 인지**: `CONCURRENTLY`, `NOT VALID` 옵션을 감지하여 리스크 점수 현실화.
+    - **다중 대상 지원**: 쉼표로 나열된 테이블/인덱스에 대한 리소스 합산 분석 구현.
 
-### Phase 1: 지능형 자가 학습 (Adaptive Config)
+### Phase 1: 지능형 자가 학습 (Adaptive Config - Next 🚀)
 거창한 AI 모델 대신 **통계학적 접근**을 통해 "데이터 기반 도구"임을 증명합니다.
 - **현실적 구현**: SQLite에 축적된 7일간의 지표를 분석하여 `MuMax`(최대 처리량), `DiskIO` 상수를 자동 추천(`--recommend`)하는 기능.
 - **엔지니어링 논리**: "블랙박스인 AI 대신, 설명 가능한 통계(Explainable Statistics)를 채택하여 인프라 설정의 신뢰성 확보."

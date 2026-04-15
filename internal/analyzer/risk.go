@@ -129,8 +129,16 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis AnalysisResult) (
 		report.EstimatedDDLTime = e.constants.TMeta
 	}
 
-	// 4. [Step 2] T_block 계산: P99 + T_ddl + ReplicationLag 합산
-	report.BlockingTime = metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)
+	// 4. [Step 2] T_block 계산: Lock 레벨 영향도(LockImpact) 적용
+	// LockLevel 8 (AccessExclusive)은 100% 블로킹, 그 이하는 영향도 비례 축소
+	lockImpact := 1.0
+	if analysis.LockLevel <= LockLevelShareUpdateExcl {
+		lockImpact = 0.1 // CONCURRENTLY 등은 서비스 영향 최소화 (약 10% 수준으로 가정)
+	} else if analysis.LockLevel < LockLevelAccessExclusive {
+		lockImpact = 0.5 // 중간 단계 Lock은 50% 수준 영향
+	}
+
+	report.BlockingTime = (metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)) * lockImpact
 
 	// 5. [Step 3] C_peak 계산: Lambda * T_block 기반 대기 세션 예측
 	lambdaPerMs := metrics.TPS / 1000.0
@@ -152,6 +160,26 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis AnalysisResult) (
 
 	// 7. [Step 5] 최종 점수 및 등급 확정
 	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
+
+	// Lock Level에 따른 최소 위험 점수 보정 (수학적 수치가 낮아도 위험성 반영)
+	baseRisk := 0.0
+	switch analysis.LockLevel {
+	case LockLevelAccessExclusive:
+		if analysis.MetadataOnly {
+			baseRisk = 30.0 // 단순 이름 변경, DEFAULT 변경 등은 Warning 수준 미만으로
+		} else {
+			baseRisk = 85.0 // TRUNCATE, DROP 등 무거운 작업은 Danger
+		}
+	case LockLevelExclusive, LockLevelShareRowExcl:
+		baseRisk = 50.0 // Warning 수준
+	case LockLevelShare:
+		baseRisk = 20.0 // 기본 인덱스 등은 최소 점수 부여
+	}
+
+	if report.RiskScore < baseRisk {
+		report.RiskScore = baseRisk
+	}
+
 	report.RiskLevel = EvaluateLevel(report.RiskScore, report.PermanentFailure)
 
 	return report, nil

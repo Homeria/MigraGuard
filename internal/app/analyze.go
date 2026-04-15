@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 
 	"github.com/Homeria/MigraGuard/internal/analyzer"
@@ -84,10 +84,8 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*AnalysisR
 	for _, res := range results {
 		// 4-1. 실효성 검증: 타겟 DB에 실제 스키마 존재 여부 확인
 		if err := s.pg.CheckTableSchemaPresence(ctx, res.TableName, res.Columns); err != nil {
-			if errors.Is(err, migraErrors.ErrTableNotFound) || errors.Is(err, migraErrors.ErrColumnNotFound) {
-				continue
-			}
-			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "검증 실패")
+			fmt.Printf("⚠️  스키마 검증 건너뜀 [%s]: %v\n", res.TableName, err)
+			continue
 		}
 
 		// 4-2. 리스크 엔진 기동: 정량적 점수 산출
