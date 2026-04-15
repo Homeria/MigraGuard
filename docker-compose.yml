@@ -26,7 +26,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10s", "--tables", "orders,products,users"]
+    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10", "--tables", "orders,products,users"]
     volumes:
       - migraguard-data:/app/data
     restart: always

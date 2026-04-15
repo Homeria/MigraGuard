@@ -27,10 +27,16 @@ func (r *ConsoleReporter) Write(results []analyzer.AnalysisResult, reports []*an
 		// 1. 리포트 헤더 출력 (테이블명 명시)
 		fmt.Println("\n" + r.drawHeader(fmt.Sprintf("🛡️ MigraGuard 리스크 분석 보고서: %s", res.TableName)))
 
-		// 2. 종합 요약 (SQL 원문, 등급, 점수)
-		fmt.Printf(" [SQL문] 원문: %s\n", r.truncate(res.RawQuery, 100))
+		// 2. 기본 정보 (SQL 원문, 등급, 위험도)
+		fmt.Printf(" [SQL문] 원문: %s\n", r.truncate(res.RawQuery, 500))
+
 		fmt.Printf(" [상태] 등급: %s | 위험 점수: %.2f%%\n", r.colorLevel(report.RiskLevel), report.RiskScore)
-		fmt.Printf(" [작업] 유형: %s | 재작성 필요: %v | 영향 컬럼: %v\n", res.Operation, res.RewriteRequired, res.Columns)
+		
+		opInfo := res.Operation
+		if res.SubOperation != "" {
+			opInfo = fmt.Sprintf("%s (%s)", res.Operation, res.SubOperation)
+		}
+		fmt.Printf(" [작업] 유형: %s | 재작성 필요: %v | 영향 컬럼: %v\n", opInfo, res.RewriteRequired, res.Columns)
 
 		// 3. 트래픽 분석 근거 (TPS 정보)
 		fmt.Println("\n 📊 트래픽 분석 데이터")
