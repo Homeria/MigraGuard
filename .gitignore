@@ -5,7 +5,7 @@
 *.so
 *.dylib
 bin/
-migraguard
+/migraguard
 
 # Go specific
 go-practice.exe
