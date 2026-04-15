@@ -43,7 +43,8 @@ MigraGuard는 아래의 5단계를 거쳐 최종 리스크 점수를 도출합�
 
 MigraGuard의 정밀한 설계 구조와 데이터 흐름은 다음의 UML 다이어그램 문서에서 확인할 수 있습니다.
 
-- **[구조 설계] [클래스 다이어그램 (Class & Interface Diagram)](./uml_diagrams/01_class_diagram.md)**: 기능 중심 패키지 구조와 DI 아키텍처 정의.
-- **[전체 지도] [전역 구현 지도 (Layered Full Detail Map)](./uml_diagrams/05_holistic_implementation_map.md)**: **[최신]** 개편된 파일 경로와 함수 시그니처를 포함한 전역 설계도.
+- **[전체 지도] [전역 구현 지도 (05.d2)](./uml_diagrams/05.d2)**: **[최신]** 계층형 수직 스택 및 함수 그리드 구조의 통합 설계도.
+- **[도메인-분석] [리스크 분석 상세 흐름 (analyze_flow.d2)](./uml_diagrams/analyze_flow.d2)**: SQL 파싱부터 리스크 평가까지의 핵심 분석 파이프라인.
+- **[도메인-에이전트] [지표 수집 상세 흐름 (agent_flow.d2)](./uml_diagrams/agent_flow.d2)**: 백그라운드 지표 수집 및 시계열 데이터 영속화 프로세스.
 - **[동적 흐름] [리스크 분석 시퀀스 (Analyze Sequence)](./uml_diagrams/02_sequence_analyze.md)**: 분석 파이프라인의 동적 호출 흐름.
 - **[판단 로직] [리스크 등급 상태도 (Risk State Diagram)](./uml_diagrams/04_state_risk_engine.md)**: 위험도 판정 및 게이트키핑 상태 변화.
