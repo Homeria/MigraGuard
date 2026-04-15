@@ -7,17 +7,25 @@ import (
 	"github.com/pganalyze/pg_query_go/v5"
 )
 
-// AnalysisResult는 SQL 정적 분석의 결과 데이터입니다.
+// AnalysisResult는 SQL 정적 분석을 통해 도출된 결과 데이터를 담는 구조체입니다.
 type AnalysisResult struct {
 	TableName       string   // 대상 테이블명
-	Operation       string   // 수행 작업 (ALTER, CREATE 등)
+	Operation       string   // SQL 작업 유형
 	Columns         []string // 관련 컬럼 목록
-	RewriteRequired bool     // 테이블 재작성(Full Rewrite) 유발 여부
-	RawQuery        string   // 분석된 실제 SQL 문장 원문
+	RewriteRequired bool     // Table Rewrite 유발 여부
+	RawQuery        string   // 원본 SQL 문장
 }
 
-// ParseSQL은 SQL 텍스트를 파싱하여 DDL 리스크 분석에 필요한 정보를 추출합니다.
+// ParseSQL은 입력받은 SQL 문자열을 AST로 파싱하여 리스크 분석 정보를 추출합니다.
+//
+// Args:
+//   - sqlText: 원시 SQL 문자열
+//
+// Returns:
+//   - []AnalysisResult: 분석 결과 슬라이스
+//   - error: 파싱 실패 에러
 func ParseSQL(sqlText string) ([]AnalysisResult, error) {
+	// 1. Postgres 파서 기동
 	result, err := pg_query.Parse(sqlText)
 	if err != nil {
 		return nil, fmt.Errorf("SQL 구문 분석 실패: %w", err)
@@ -25,6 +33,7 @@ func ParseSQL(sqlText string) ([]AnalysisResult, error) {
 
 	var analyses []AnalysisResult
 
+	// 2. 문장별 순회 및 DDL 특징 추출
 	for _, stmt := range result.Stmts {
 		node := stmt.Stmt
 		var res AnalysisResult
@@ -32,20 +41,10 @@ func ParseSQL(sqlText string) ([]AnalysisResult, error) {
 		if node.GetAlterTableStmt() != nil {
 			res = analyzeAlterTable(node.GetAlterTableStmt())
 		} else {
-			// 지원하지 않는 구문은 건너뜀 (추후 확장 가능)
 			continue
 		}
 
-		// SQL 원문 텍스트 캡처 (Statement 범위 추출)
-		// pg_query_go의 Stmt 데이터에는 원본 SQL에서의 위치 정보가 포함되어 있음
-		res.RawQuery = sqlText
-		if len(result.Stmts) > 1 {
-			// 여러 문장이 있을 경우, 현재 문장의 길이만큼 최대한 근사하게 자름 (단순화된 방식)
-			// 실제로는 stmt.Location 등을 활용하여 정밀하게 추출 가능
-			res.RawQuery = "Selected Statement from multi-query script"
-		}
-		
-		// 보다 정확한 원문 전달을 위해 전체 텍스트에서 해당 문장을 식별하는 로직 (단순화 버전)
+		// 3. 원문 텍스트 매핑
 		if len(sqlText) > 0 {
 			res.RawQuery = strings.TrimSpace(sqlText)
 		}
@@ -56,31 +55,34 @@ func ParseSQL(sqlText string) ([]AnalysisResult, error) {
 	return analyses, nil
 }
 
+// analyzeAlterTable은 ALTER TABLE 노드를 분석하여 재작성 발생 여부를 판별합니다.
+//
+// Args:
+//   - stmt: 파싱된 ALTER 문장 노드
+//
+// Returns:
+//   - AnalysisResult: 상세 분석 정보
 func analyzeAlterTable(stmt *pg_query.AlterTableStmt) AnalysisResult {
+	// 1. 기본 정보 할당
 	tableName := stmt.Relation.Relname
 	res := AnalysisResult{
 		TableName: tableName,
 		Operation: "ALTER TABLE",
 	}
 
+	// 2. 서브 명령 순회 및 고위험 패턴(Type Change, Constraint) 감지
 	for _, cmd := range stmt.Cmds {
 		subCmd := cmd.GetAlterTableCmd()
-		if subCmd == nil {
-			continue
-		}
+		if subCmd == nil { continue }
 
-		// Table Rewrite를 유발하는 대표적인 케이스 판별
-		// 1. 컬럼 타입 변경 (Type Change)
 		if subCmd.Subtype == pg_query.AlterTableType_AT_AlterColumnType {
 			res.RewriteRequired = true
 		}
-
-		// 2. 새로운 제약 조건 추가 (일부 케이스)
 		if subCmd.Subtype == pg_query.AlterTableType_AT_AddConstraint {
 			res.RewriteRequired = true
 		}
 
-		// 관련 컬럼 추출
+		// 3. 대상 컬럼 수집
 		if subCmd.Name != "" {
 			res.Columns = append(res.Columns, subCmd.Name)
 		}
@@ -89,7 +91,14 @@ func analyzeAlterTable(stmt *pg_query.AlterTableStmt) AnalysisResult {
 	return res
 }
 
-// NormalizeTableName은 대소문자 구분 없는 테이블 매칭을 위한 헬퍼 함수입니다.
+// NormalizeTableName은 일관된 처리를 위해 테이블명을 소문자로 정규화합니다.
+//
+// Args:
+//   - name: 원본 이름
+//
+// Returns:
+//   - string: 정규화된 이름
 func NormalizeTableName(name string) string {
+	// 1. 공백 제거 및 소문자 변환
 	return strings.ToLower(strings.TrimSpace(name))
 }
