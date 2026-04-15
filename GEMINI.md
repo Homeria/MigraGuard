@@ -18,10 +18,14 @@
 3. **한글 기술 자산 최적화**: 소스 코드 내 공학적 주석 전수 복구 및 Go Doc 스타일 표준화.
 4. **문서 도메인 분리**: 분석(Analyze)과 수집(Agent) 흐름을 독립된 다이어그램으로 분리하여 캡스톤 발표 준비 완료.
 
-## 🚀 향후 로드맵 (Phase 13~14 전략 재편)
-1. **`feat/adaptive-config` (v3.7 예정)**:
+## 🚀 향후 로드맵 (Phase 13~15 전략 재편)
+1. **`feat/expand-ddl-analysis` (v3.7 예정)**:
+   - **AST 분석 봉인 해제**: `ALTER TABLE` 외에 `CREATE INDEX`, `DROP`, `TRUNCATE` 등 DDL 전반으로 인식 범위 확대.
+   - **Lock 레벨 매트릭스 도입**: PostgreSQL의 8단계 Lock 레벨을 추출하여 리스크 점수에 반영.
+   - **PG 전용 구문 정밀 분석**: `CONCURRENTLY`, `NOT VALID` 등 성능 최적화 구문 감지 로직 고도화.
+2. **`feat/adaptive-config` (v3.8 예정)**:
    - SQLite 시계열 데이터를 분석하여 `MuMax`, `DiskIO` 상수를 시스템이 스스로 추천하는 알고리즘 구현.
-2. **`feat/github-integration` (v4.0)**:
+3. **`feat/github-integration` (v4.0)**:
    - PR 자동 리스크 코멘트 봇 및 CI/CD 게이트키핑 강화.
 
 
