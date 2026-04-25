@@ -22,7 +22,7 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
 	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "Target PostgreSQL connection string (required)")
-	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "./migraguard.db", "Local metric storage (SQLite) path")
+	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "", "Local metric storage (SQLite) path")
 	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
 }
 
@@ -36,26 +36,45 @@ based on real-time and historical traffic data.`,
 		filePath := args[0]
 		ctx := context.Background()
 
-		// 1. Connection info setup
-		if analyzeDbString == "" && GlobalConfig.Database.Postgres != "" {
-			analyzeDbString = GlobalConfig.Database.Postgres
+		// 1. Resolve PostgreSQL DSN (Priority: Flag > GlobalConfig > Default)
+		finalDB := analyzeDbString
+		if finalDB == "" {
+			finalDB = GlobalConfig.Database.Postgres
 		}
-		if analyzeDbString == "" {
-			fmt.Println("[ERROR] PostgreSQL connection string is required. Please check --db flag or config file.")
-			os.Exit(1)
+		if finalDB == "" {
+			finalDB = "postgres://user:pass@localhost:5432/postgres"
 		}
 
-		// 2. [Black Box] MigraGuard client initialization
+		// 2. Resolve SQLite Path
+		finalSQLite := analyzeSqlitePath
+		if finalSQLite == "" {
+			finalSQLite = GlobalConfig.Database.SQLite
+		}
+		if finalSQLite == "" {
+			finalSQLite = "migraguard.db"
+		}
+
+		// 3. [Black Box] MigraGuard client initialization
 		mg, err := migraguard.New(migraguard.Config{
-			PostgresDSN: analyzeDbString,
-			SQLitePath:  analyzeSqlitePath,
+			PostgresDSN: finalDB,
+			SQLitePath:  finalSQLite,
 			Verbose:     Verbose,
 			Risk: types.RiskConstants{
-				DiskIO:   GlobalConfig.Risk.DiskIO,
-				MuMax:    GlobalConfig.Risk.MuMax,
-				CMax:     GlobalConfig.Risk.CMax,
-				TTimeout: GlobalConfig.Risk.TTimeout,
-				TMeta:    GlobalConfig.Risk.TMeta,
+				DiskIO:                  GlobalConfig.Risk.DiskIO,
+				MuMax:                   GlobalConfig.Risk.MuMax,
+				CMax:                    GlobalConfig.Risk.CMax,
+				TTimeout:                GlobalConfig.Risk.TTimeout,
+				TMeta:                   GlobalConfig.Risk.TMeta,
+				ThresholdDanger:         GlobalConfig.Risk.Thresholds.Danger,
+				ThresholdWarning:        GlobalConfig.Risk.Thresholds.Warning,
+				AvgMultiplier:           GlobalConfig.Risk.Weights.AvgMultiplier,
+				PeakMultiplier:          GlobalConfig.Risk.Weights.PeakMultiplier,
+				ConcurrentImpact:        GlobalConfig.Risk.Weights.ConcurrentImpact,
+				MiddleImpact:            GlobalConfig.Risk.Weights.MiddleImpact,
+				BaseAccessExclusiveMeta: GlobalConfig.Risk.Weights.BaseAccessExclusiveMeta,
+				BaseAccessExclusiveFull: GlobalConfig.Risk.Weights.BaseAccessExclusiveFull,
+				BaseExclusive:           GlobalConfig.Risk.Weights.BaseExclusive,
+				BaseShare:               GlobalConfig.Risk.Weights.BaseShare,
 			},
 		})
 		if err != nil {
@@ -64,14 +83,14 @@ based on real-time and historical traffic data.`,
 		}
 		defer mg.Close()
 
-		// 3. [Black Box] Run analysis
+		// 4. [Black Box] Run analysis
 		resp, err := mg.Analyze(ctx, filePath)
 		if err != nil {
 			fmt.Printf("[ERROR] Analysis failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		// 4. Output results
+		// 5. Output results
 		var rpt reporter.Reporter
 		if analyzeOutput == "markdown" {
 			rpt = reporter.NewMarkdownReporter()
@@ -84,7 +103,7 @@ based on real-time and historical traffic data.`,
 			os.Exit(1)
 		}
 
-		// 5. Gatekeeping
+		// 6. Gatekeeping
 		for _, r := range resp.Reports {
 			if r.RiskLevel == "Danger" {
 				fmt.Println("\n[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.")

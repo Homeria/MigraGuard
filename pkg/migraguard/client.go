@@ -22,6 +22,9 @@ type Config struct {
 	Risk          types.RiskConstants
 }
 
+// Option is a functional option for configuring the client.
+type Option func(*Config)
+
 // Client is the main entry point for all MigraGuard features.
 type Client struct {
 	config *Config
@@ -29,12 +32,18 @@ type Client struct {
 	sqlite *sqlite.SQLiteAdapter
 }
 
-// New creates a new MigraGuard client and initializes database connections.
-func New(cfg Config) (*Client, error) {
-	if cfg.Risk.CMax == 0 {
-		cfg.Risk = analyzer.DefaultRiskConstants()
+// New creates a new MigraGuard client with optional overrides.
+func New(cfg Config, opts ...Option) (*Client, error) {
+	// 1. Fill missing risk parameters with system defaults (Surgical approach)
+	defaults := analyzer.DefaultRiskConstants()
+	fillMissingRiskParams(&cfg.Risk, &defaults)
+
+	// 2. Apply functional options (highest priority)
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 
+	// 3. Initialize Adapters
 	pgAdapter, err := postgres.NewAdapter(cfg.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
@@ -52,25 +61,54 @@ func New(cfg Config) (*Client, error) {
 	}, nil
 }
 
-// Close releases all resources used by the client.
+// fillMissingRiskParams ensures that user settings are preserved while filling in gaps.
+func fillMissingRiskParams(target *types.RiskConstants, def *types.RiskConstants) {
+	if target.DiskIO == 0 { target.DiskIO = def.DiskIO }
+	if target.TMeta == 0 { target.TMeta = def.TMeta }
+	if target.MuMax == 0 { target.MuMax = def.MuMax }
+	if target.CMax == 0 { target.CMax = def.CMax }
+	if target.TTimeout == 0 { target.TTimeout = def.TTimeout }
+	if target.ThresholdDanger == 0 { target.ThresholdDanger = def.ThresholdDanger }
+	if target.ThresholdWarning == 0 { target.ThresholdWarning = def.ThresholdWarning }
+	if target.AvgMultiplier == 0 { target.AvgMultiplier = def.AvgMultiplier }
+	if target.PeakMultiplier == 0 { target.PeakMultiplier = def.PeakMultiplier }
+	if target.ConcurrentImpact == 0 { target.ConcurrentImpact = def.ConcurrentImpact }
+	if target.MiddleImpact == 0 { target.MiddleImpact = def.MiddleImpact }
+	if target.BaseAccessExclusiveMeta == 0 { target.BaseAccessExclusiveMeta = def.BaseAccessExclusiveMeta }
+	if target.BaseAccessExclusiveFull == 0 { target.BaseAccessExclusiveFull = def.BaseAccessExclusiveFull }
+	if target.BaseExclusive == 0 { target.BaseExclusive = def.BaseExclusive }
+	if target.BaseShare == 0 { target.BaseShare = def.BaseShare }
+}
+
+// --- Functional Options ---
+
+func WithVerbose(v bool) Option {
+	return func(c *Config) { c.Verbose = v }
+}
+
+func WithDangerThreshold(t float64) Option {
+	return func(c *Config) { c.Risk.ThresholdDanger = t }
+}
+
+func WithWarningThreshold(t float64) Option {
+	return func(c *Config) { c.Risk.ThresholdWarning = t }
+}
+
+// Close releases all resources.
 func (c *Client) Close() error {
-	if c.pg != nil {
-		c.pg.Close()
-	}
-	if c.sqlite != nil {
-		c.sqlite.Close()
-	}
+	if c.pg != nil { c.pg.Close() }
+	if c.sqlite != nil { c.sqlite.Close() }
 	return nil
 }
 
-// StartAgent starts the background metric collection process.
+// StartAgent starts background collection.
 func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays)
 	agent.SetTargetTables(targetTables)
 	return agent.Run(ctx)
 }
 
-// Analyze analyzes a migration SQL file and returns a risk report.
+// Analyze performs the analysis.
 func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisResponse, error) {
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
 	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})

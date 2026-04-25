@@ -23,66 +23,127 @@ type Config struct {
 	Risk     RiskConfig     `mapstructure:"risk"`
 }
 
-// DatabaseConfig defines database connection paths.
 type DatabaseConfig struct {
 	Postgres string `mapstructure:"postgres"`
 	SQLite   string `mapstructure:"sqlite"`
 }
 
-// AgentConfig defines parameters for the metric collection agent.
 type AgentConfig struct {
 	Interval      string `mapstructure:"interval"`
 	RetentionDays int    `mapstructure:"retention_days"`
 }
 
-// RiskConfig defines infrastructure performance variables for risk analysis.
 type RiskConfig struct {
 	DiskIO   int64   `mapstructure:"disk_io"`
 	MuMax    float64 `mapstructure:"mu_max"`
 	CMax     int     `mapstructure:"c_max"`
 	TTimeout float64 `mapstructure:"t_timeout"`
 	TMeta    float64 `mapstructure:"t_meta"`
+
+	Thresholds RiskThresholds `mapstructure:"thresholds"`
+	Weights    RiskWeights    `mapstructure:"weights"`
 }
 
-// LoadConfig loads configuration from a file or environment variables.
+type RiskThresholds struct {
+	Danger  float64 `mapstructure:"danger"`
+	Warning float64 `mapstructure:"warning"`
+}
+
+type RiskWeights struct {
+	AvgMultiplier           float64 `mapstructure:"avg_multiplier"`
+	PeakMultiplier          float64 `mapstructure:"peak_multiplier"`
+	ConcurrentImpact        float64 `mapstructure:"concurrent_impact"`
+	MiddleImpact            float64 `mapstructure:"middle_impact"`
+	BaseAccessExclusiveMeta float64 `mapstructure:"base_access_exclusive_meta"`
+	BaseAccessExclusiveFull float64 `mapstructure:"base_access_exclusive_full"`
+	BaseExclusive           float64 `mapstructure:"base_exclusive"`
+	BaseShare               float64 `mapstructure:"base_share"`
+}
+
+// ToRiskConstants maps the hierarchical configuration to the flat SDK structure.
+func (rc *RiskConfig) ToRiskConstants() types.RiskConstants {
+	return types.RiskConstants{
+		DiskIO:                  rc.DiskIO,
+		MuMax:                   rc.MuMax,
+		CMax:                    rc.CMax,
+		TTimeout:                rc.TTimeout,
+		TMeta:                   rc.TMeta,
+		ThresholdDanger:         rc.Thresholds.Danger,
+		ThresholdWarning:        rc.Thresholds.Warning,
+		AvgMultiplier:           rc.Weights.AvgMultiplier,
+		PeakMultiplier:          rc.Weights.PeakMultiplier,
+		ConcurrentImpact:        rc.Weights.ConcurrentImpact,
+		MiddleImpact:            rc.Weights.MiddleImpact,
+		BaseAccessExclusiveMeta: rc.Weights.BaseAccessExclusiveMeta,
+		BaseAccessExclusiveFull: rc.Weights.BaseAccessExclusiveFull,
+		BaseExclusive:           rc.Weights.BaseExclusive,
+		BaseShare:               rc.Weights.BaseShare,
+	}
+}
+
+// LoadConfig loads configuration and ensures environment variables are mapped correctly.
 func LoadConfig(path string) (*Config, error) {
+	v := viper.New()
+
 	if path != "" {
-		viper.SetConfigFile(path)
+		v.SetConfigFile(path)
 	} else {
-		viper.SetConfigName("migraguard")
-		viper.SetConfigType("yaml")
-		viper.AddConfigPath(".")
-		viper.AddConfigPath("/etc/migraguard/")
+		v.SetConfigName("migraguard")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("/etc/migraguard/")
 	}
 
-	viper.SetEnvPrefix("MIGRAGUARD")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+	v.SetEnvPrefix("MIGRAGUARD")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
-	setDefaults()
+	// 1. Set internal defaults to help Unmarshal recognize keys
+	setInternalDefaults(v)
 
-	if err := viper.ReadInConfig(); err != nil {
+	// 2. Try to read config file (ignore error if not found)
+	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("failed to load config file: %w", err)
+			// Real error (e.g. permission or syntax)
+			return nil, err
 		}
 	}
 
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// 3. Manual override for nested structs if Unmarshal missed them
+	// This is a known limitation of Viper when config file is missing
+	if config.Database.Postgres == "" {
+		config.Database.Postgres = v.GetString("database.postgres")
+	}
+	if config.Database.SQLite == "" {
+		config.Database.SQLite = v.GetString("database.sqlite")
 	}
 
 	return &config, nil
 }
 
-// setDefaults defines system default values when config is missing.
-func setDefaults() {
-	viper.SetDefault("database.sqlite", "./migraguard.db")
-	viper.SetDefault("agent.interval", "1m")
-	viper.SetDefault("agent.retention_days", 7)
-	viper.SetDefault("risk.disk_io", DefaultDiskIO)
-	viper.SetDefault("risk.mu_max", DefaultMuMax)
-	viper.SetDefault("risk.c_max", DefaultCMax)
-	viper.SetDefault("risk.t_timeout", DefaultTTimeout)
-	viper.SetDefault("risk.t_meta", DefaultTMeta)
+func setInternalDefaults(v *viper.Viper) {
+	v.SetDefault("database.postgres", "")
+	v.SetDefault("database.sqlite", "./migraguard.db")
+	v.SetDefault("agent.interval", "1m")
+	v.SetDefault("agent.retention_days", 7)
+	v.SetDefault("risk.disk_io", DefaultDiskIO)
+	v.SetDefault("risk.mu_max", DefaultMuMax)
+	v.SetDefault("risk.c_max", DefaultCMax)
+	v.SetDefault("risk.t_timeout", DefaultTTimeout)
+	v.SetDefault("risk.t_meta", DefaultTMeta)
+	v.SetDefault("risk.thresholds.danger", 80.0)
+	v.SetDefault("risk.thresholds.warning", 50.0)
+	v.SetDefault("risk.weights.avg_multiplier", 1.2)
+	v.SetDefault("risk.weights.peak_multiplier", 0.8)
+	v.SetDefault("risk.weights.concurrent_impact", 0.1)
+	v.SetDefault("risk.weights.middle_impact", 0.5)
+	v.SetDefault("risk.weights.base_access_exclusive_meta", 30.0)
+	v.SetDefault("risk.weights.base_access_exclusive_full", 85.0)
+	v.SetDefault("risk.weights.base_exclusive", 50.0)
+	v.SetDefault("risk.weights.base_share", 20.0)
 }

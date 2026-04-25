@@ -8,14 +8,31 @@ import (
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
-// DefaultRiskConstants returns standard threshold values.
+// DefaultRiskConstants returns standard threshold values for the risk engine.
 func DefaultRiskConstants() types.RiskConstants {
 	return types.RiskConstants{
+		// Performance
 		DiskIO:   100 * 1024 * 1024,
 		TMeta:    100.0,
 		MuMax:    5000.0,
 		CMax:     100,
 		TTimeout: 5000.0,
+
+		// Thresholds
+		ThresholdDanger:  80.0,
+		ThresholdWarning: 50.0,
+
+		// Algorithm Weights
+		AvgMultiplier:    1.2,
+		PeakMultiplier:   0.8,
+		ConcurrentImpact: 0.1,
+		MiddleImpact:     0.5,
+
+		// Base Risk Values
+		BaseAccessExclusiveMeta: 30.0,
+		BaseAccessExclusiveFull: 85.0,
+		BaseExclusive:           50.0,
+		BaseShare:               20.0,
 	}
 }
 
@@ -37,7 +54,7 @@ func NewRiskEngine(pg types.PostgresClient, sqlite types.SQLiteClient, constants
 	}
 }
 
-// AnalyzeRisk performs the 5-step risk analysis.
+// AnalyzeRisk performs the 5-step risk analysis using configurable weights.
 func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisResult) (*types.RiskAnalysisReport, error) {
 	metrics, err := e.pg.FetchTableDynamicMetrics(ctx, analysis.TableName)
 	if err != nil {
@@ -59,17 +76,18 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 		report.SafeWindow, report.SafeWindowTPS, _ = e.sqlite.IdentifySafestDeploymentWindow()
 		report.TopQueries, _ = e.sqlite.GetTopHeavyQueries(3)
 
-		weightedAvg := report.AvgTPS1h * 1.2
-		weightedPeak := report.PeakTPS24h * 0.8
+		// Use configurable multipliers for conservative TPS estimation
+		weightedAvg := report.AvgTPS1h * e.constants.AvgMultiplier
+		weightedPeak := report.PeakTPS24h * e.constants.PeakMultiplier
 		maxTPS := report.CurrentTPS
 		report.TPSSource = "Real-time"
 		if weightedAvg > maxTPS {
 			maxTPS = weightedAvg
-			report.TPSSource = "1h-Avg (+20%)"
+			report.TPSSource = fmt.Sprintf("1h-Avg (x%.1f)", e.constants.AvgMultiplier)
 		}
 		if weightedPeak > maxTPS {
 			maxTPS = weightedPeak
-			report.TPSSource = "24h-Peak (-20%)"
+			report.TPSSource = fmt.Sprintf("24h-Peak (x%.1f)", e.constants.PeakMultiplier)
 		}
 		report.BaseTPS = maxTPS
 		metrics.TPS = maxTPS
@@ -81,11 +99,12 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 		report.EstimatedDDLTime = e.constants.TMeta
 	}
 
+	// Use configurable lock impact factors
 	lockImpact := 1.0
 	if analysis.LockLevel <= types.LockLevelShareUpdateExcl {
-		lockImpact = 0.1
+		lockImpact = e.constants.ConcurrentImpact
 	} else if analysis.LockLevel < types.LockLevelAccessExclusive {
-		lockImpact = 0.5
+		lockImpact = e.constants.MiddleImpact
 	}
 
 	report.BlockingTime = (metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)) * lockImpact
@@ -108,25 +127,27 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 
 	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
 
+	// Apply configurable base risk scores
 	baseRisk := 0.0
 	switch analysis.LockLevel {
 	case types.LockLevelAccessExclusive:
 		if analysis.MetadataOnly {
-			baseRisk = 30.0
+			baseRisk = e.constants.BaseAccessExclusiveMeta
 		} else {
-			baseRisk = 85.0
+			baseRisk = e.constants.BaseAccessExclusiveFull
 		}
 	case types.LockLevelExclusive:
-		baseRisk = 50.0
+		baseRisk = e.constants.BaseExclusive
 	case types.LockLevelShare:
-		baseRisk = 20.0
+		baseRisk = e.constants.BaseShare
 	}
 
 	if report.RiskScore < baseRisk {
 		report.RiskScore = baseRisk
 	}
 
-	report.RiskLevel = EvaluateLevel(report.RiskScore, report.PermanentFailure)
+	// Evaluate level using configurable thresholds
+	report.RiskLevel = e.EvaluateLevel(report.RiskScore, report.PermanentFailure)
 
 	return report, nil
 }
