@@ -1,0 +1,102 @@
+package types
+
+import "time"
+
+// PostgreSQL Lock Levels (1 to 8)
+const (
+	LockLevelNone            = 0
+	LockLevelAccessShare     = 1 // SELECT
+	LockLevelRowShare        = 2 // SELECT FOR UPDATE
+	LockLevelRowExclusive    = 3 // INSERT, UPDATE, DELETE
+	LockLevelShareUpdateExcl = 4 // VACUUM, CREATE INDEX CONCURRENTLY
+	LockLevelShare           = 5 // CREATE INDEX
+	LockLevelShareRowExcl    = 6 // EXCLUSIVE
+	LockLevelExclusive       = 7 // Block all but Access Share
+	LockLevelAccessExclusive = 8 // ALTER TABLE, DROP, TRUNCATE (Full Block)
+)
+
+// WorkloadSnapshot represents a point-in-time snapshot of query statistics.
+type WorkloadSnapshot struct {
+	Timestamp      time.Time
+	QueryID        int64
+	Query          string
+	Calls          int64
+	TotalTime      float64
+	Rows           int64
+	SharedBlksHit  int64
+	SharedBlksRead int64
+}
+
+// TableDynamicMetrics represents the real-time state of a table.
+type TableDynamicMetrics struct {
+	TableName         string
+	TableSize         int64
+	ReplicationLag    float64
+	ActiveConnections int
+	P99Time           float64
+	TPS               float64
+}
+
+// BaselineStats represents historical workload patterns.
+type BaselineStats struct {
+	AvgTPS_1h   float64
+	PeakTPS_24h float64
+}
+
+// TopQueryInfo represents a high-impact query.
+type TopQueryInfo struct {
+	QueryID   int64
+	QueryText string
+	Calls     int64
+	TotalTime float64
+	Impact    float64
+}
+
+// AnalysisResult contains the results of a static SQL analysis.
+type AnalysisResult struct {
+	TableName       string
+	IsIndex         bool
+	Operation       string
+	SubOperation    string
+	Columns         []string
+	RewriteRequired bool
+	MetadataOnly    bool
+	LockLevel       int
+	RawQuery        string
+}
+
+// RiskConstants defines thresholds for risk calculation.
+type RiskConstants struct {
+	DiskIO   int64   `mapstructure:"disk_io"`
+	TMeta    float64 `mapstructure:"t_meta"`
+	MuMax    float64 `mapstructure:"mu_max"`
+	CMax     int     `mapstructure:"c_max"`
+	TTimeout float64 `mapstructure:"t_timeout"`
+}
+
+// RiskAnalysisReport bundles the risk model results.
+type RiskAnalysisReport struct {
+	RiskScore        float64
+	RiskLevel        string
+	EstimatedDDLTime float64
+	BlockingTime     float64
+	PeakConnections  int
+	RecoveryTime     float64
+	PermanentFailure bool
+	BaseTPS          float64
+	TPSSource        string
+	CurrentTPS       float64
+	AvgTPS1h         float64
+	PeakTPS24h       float64
+	ActiveConns      int
+	TableSize        int64
+	TopQueries       []TopQueryInfo
+	SafeWindow       string
+	SafeWindowTPS    float64
+}
+
+// AnalysisResponse bundles all results.
+type AnalysisResponse struct {
+	Results []AnalysisResult
+	Reports []*RiskAnalysisReport
+}

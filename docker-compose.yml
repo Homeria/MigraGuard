@@ -1,6 +1,6 @@
 services:
   # 🐘 Target Database (PostgreSQL)
-  # 운영 환경을 모사하는 타겟 데이터베이스
+  # Mimics the production environment
   db:
     image: postgres:15-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
@@ -20,7 +20,7 @@ services:
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
 
   # 🛡️ MigraGuard Agent (Background Metrics Collector)
-  # 주기적으로 DB 지표를 수집하여 공유 SQLite에 저장
+  # Collects metrics periodically and stores them in SQLite
   agent:
     build: .
     depends_on:
@@ -32,10 +32,9 @@ services:
     restart: always
 
   # 🧪 Load Generator (Traffic Simulator)
-  # 이커머스 트래픽을 모사하여 실제 부하를 유발함
+  # Simulates e-commerce traffic to generate workload
   load-generator:
     build: .
-    # [수정] migraguard 대신 별도로 빌드된 loadgen 바이너리 실행
     entrypoint: ["/app/loadgen"]
     command: ["--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
     depends_on:
@@ -43,13 +42,17 @@ services:
         condition: service_healthy
     restart: always
 
-  # 🔍 MigraGuard Analyze (CLI Shell)
-  analyze-shell:
+  # 🔍 MigraGuard Analyzer (On-demand Analysis)
+  # This service is triggered manually via:
+  # docker compose run --rm analyze analyze [file_path]
+  analyze:
     build: .
+    profiles:
+      - tools
     volumes:
       - migraguard-data:/app/data
       - .:/app/code
-    command: ["tail", "-f", "/dev/null"]
+    # No permanent command needed; runs the default ENTRYPOINT (migraguard)
 
 volumes:
   migraguard-data:

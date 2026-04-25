@@ -2,28 +2,45 @@ package main
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/Homeria/MigraGuard/pkg/migraguard"
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(checkCmd)
-}
+var checkDbURL string
 
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "MigraGuard 에이전트 및 DB 연결 상태를 점검합니다",
+	Short: "Check target database connection and agent status",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("🔍 시스템 상태 점검 중...")
-		fmt.Println("✅ 설정 파일 로드 완료")
-		
-		if GlobalConfig.Database.Postgres != "" {
-			fmt.Println("✅ PostgreSQL 접속 설정 확인됨")
-		} else {
-			fmt.Println("⚠️  PostgreSQL 접속 설정이 비어있습니다. --db 플래그를 사용하세요.")
+		// decision on connection string
+		if checkDbURL == "" && GlobalConfig.Database.Postgres != "" {
+			checkDbURL = GlobalConfig.Database.Postgres
 		}
 
-		fmt.Printf("✅ SQLite 경로: %s\n", GlobalConfig.Database.SQLite)
-		fmt.Println("\n👍 상태 점검 완료. 'analyze' 또는 'agent' 명령을 실행할 준비가 되었습니다.")
+		if checkDbURL == "" {
+			fmt.Println("[ERROR] PostgreSQL connection string is required.")
+			os.Exit(1)
+		}
+
+		// Initialize client
+		mg, err := migraguard.New(migraguard.Config{
+			PostgresDSN: checkDbURL,
+			SQLitePath:  "./migraguard.db",
+		})
+		if err != nil {
+			fmt.Printf("[ERROR] Connection failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer mg.Close()
+
+		fmt.Println("[OK] Successfully connected to PostgreSQL.")
+		fmt.Println("[INFO] MigraGuard SDK is ready to use.")
 	},
+}
+
+func init() {
+	rootCmd.AddCommand(checkCmd)
+	checkCmd.Flags().StringVar(&checkDbURL, "db", "", "Target PostgreSQL URL")
 }
