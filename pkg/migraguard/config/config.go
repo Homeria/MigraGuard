@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 	"github.com/spf13/viper"
 )
 
@@ -104,7 +105,6 @@ func LoadConfig(path string) (*Config, error) {
 	// 2. Try to read config file (ignore error if not found)
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Real error (e.g. permission or syntax)
 			return nil, err
 		}
 	}
@@ -115,7 +115,6 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	// 3. Manual override for nested structs if Unmarshal missed them
-	// This is a known limitation of Viper when config file is missing
 	if config.Database.Postgres == "" {
 		config.Database.Postgres = v.GetString("database.postgres")
 	}
