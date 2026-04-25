@@ -7,56 +7,56 @@ import (
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/reporter"
-	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 	"github.com/spf13/cobra"
 )
 
-// analyze command flags
 var (
-	analyzeDbString   string // Postgres connection string
-	analyzeSqlitePath string // SQLite file path
-	analyzeOutput     string // Output format (console/markdown)
+	analyzeDbString   string
+	analyzeSqlitePath string
+	analyzeOutput     string
 )
 
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
 
-	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "Target PostgreSQL connection string (required)")
-	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "./migraguard.db", "Local metric storage (SQLite) path")
+	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "Target PostgreSQL connection string")
+	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "", "Local metric storage (SQLite) path")
 	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
 }
 
 var analyzeCmd = &cobra.Command{
 	Use:   "analyze [migration_file.sql]",
-	Short: "Immediately analyze migration SQL file and evaluate risk",
-	Long: `Parses the provided DDL script and evaluates the potential deployment risk 
-based on real-time and historical traffic data.`,
-	Args: cobra.ExactArgs(1),
+	Short: "Analyze migration SQL file and evaluate risk",
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filePath := args[0]
 		ctx := context.Background()
 
-		// 1. Connection info setup
-		if analyzeDbString == "" && GlobalConfig.Database.Postgres != "" {
-			analyzeDbString = GlobalConfig.Database.Postgres
+		// 1. Resolve connection info
+		finalDB := analyzeDbString
+		if finalDB == "" {
+			finalDB = GlobalConfig.Database.Postgres
 		}
-		if analyzeDbString == "" {
-			fmt.Println("[ERROR] PostgreSQL connection string is required. Please check --db flag or config file.")
+		if finalDB == "" {
+			fmt.Println("[ERROR] PostgreSQL connection string is required.")
 			os.Exit(1)
 		}
 
-		// 2. [Black Box] MigraGuard client initialization
+		finalSQLite := analyzeSqlitePath
+		if finalSQLite == "" {
+			finalSQLite = GlobalConfig.Database.SQLite
+		}
+		if finalSQLite == "" {
+			finalSQLite = "migraguard.db"
+		}
+
+		// 2. Initialize client with GlobalConfig (which includes YAML/Env)
+		// Functional options can be used here for specific flag overrides if needed
 		mg, err := migraguard.New(migraguard.Config{
-			PostgresDSN: analyzeDbString,
-			SQLitePath:  analyzeSqlitePath,
+			PostgresDSN: finalDB,
+			SQLitePath:  finalSQLite,
 			Verbose:     Verbose,
-			Risk: types.RiskConstants{
-				DiskIO:   GlobalConfig.Risk.DiskIO,
-				MuMax:    GlobalConfig.Risk.MuMax,
-				CMax:     GlobalConfig.Risk.CMax,
-				TTimeout: GlobalConfig.Risk.TTimeout,
-				TMeta:    GlobalConfig.Risk.TMeta,
-			},
+			Risk:        GlobalConfig.Risk.ToRiskConstants(), // Map GlobalConfig to SDK constants
 		})
 		if err != nil {
 			fmt.Printf("[ERROR] MigraGuard initialization failed: %v\n", err)
@@ -64,7 +64,7 @@ based on real-time and historical traffic data.`,
 		}
 		defer mg.Close()
 
-		// 3. [Black Box] Run analysis
+		// 3. Run analysis
 		resp, err := mg.Analyze(ctx, filePath)
 		if err != nil {
 			fmt.Printf("[ERROR] Analysis failed: %v\n", err)

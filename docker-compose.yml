@@ -1,6 +1,5 @@
 services:
   # 🐘 Target Database (PostgreSQL)
-  # Mimics the production environment
   db:
     image: postgres:15-alpine
     command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
@@ -17,24 +16,27 @@ services:
       retries: 5
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./build/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
 
   # 🛡️ MigraGuard Agent (Background Metrics Collector)
-  # Collects metrics periodically and stores them in SQLite
   agent:
-    build: .
+    build:
+      context: .
+      dockerfile: build/docker/Dockerfile
     depends_on:
       db:
         condition: service_healthy
-    command: ["agent", "--db", "postgres://user:pass@db:5432/target_db", "--sqlite", "/app/data/migraguard.db", "--interval", "10", "--tables", "orders,products,users"]
+    command: ["agent", "--tables", "orders,products,users"]
     volumes:
       - migraguard-data:/app/data
+      - ./migraguard.yaml:/app/migraguard.yaml
     restart: always
 
   # 🧪 Load Generator (Traffic Simulator)
-  # Simulates e-commerce traffic to generate workload
   load-generator:
-    build: .
+    build:
+      context: .
+      dockerfile: build/docker/Dockerfile
     entrypoint: ["/app/loadgen"]
     command: ["--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
     depends_on:
@@ -43,16 +45,16 @@ services:
     restart: always
 
   # 🔍 MigraGuard Analyzer (On-demand Analysis)
-  # This service is triggered manually via:
-  # docker compose run --rm analyze analyze [file_path]
   analyze:
-    build: .
+    build:
+      context: .
+      dockerfile: build/docker/Dockerfile
     profiles:
       - tools
     volumes:
       - migraguard-data:/app/data
+      - ./migraguard.yaml:/app/migraguard.yaml
       - .:/app/code
-    # No permanent command needed; runs the default ENTRYPOINT (migraguard)
 
 volumes:
   migraguard-data:

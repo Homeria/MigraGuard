@@ -65,13 +65,30 @@ type AnalysisResult struct {
 	RawQuery        string
 }
 
-// RiskConstants defines thresholds for risk calculation.
+// RiskConstants defines thresholds and weights for risk calculation.
 type RiskConstants struct {
+	// Performance
 	DiskIO   int64   `mapstructure:"disk_io"`
 	TMeta    float64 `mapstructure:"t_meta"`
 	MuMax    float64 `mapstructure:"mu_max"`
 	CMax     int     `mapstructure:"c_max"`
 	TTimeout float64 `mapstructure:"t_timeout"`
+
+	// Decision Thresholds
+	ThresholdDanger  float64 `mapstructure:"threshold_danger"`
+	ThresholdWarning float64 `mapstructure:"threshold_warning"`
+
+	// Algorithm Weights
+	AvgMultiplier    float64 `mapstructure:"avg_multiplier"`
+	PeakMultiplier   float64 `mapstructure:"peak_multiplier"`
+	ConcurrentImpact float64 `mapstructure:"concurrent_impact"`
+	MiddleImpact     float64 `mapstructure:"middle_impact"`
+
+	// Base Risk Values
+	BaseAccessExclusiveMeta float64 `mapstructure:"base_access_exclusive_meta"`
+	BaseAccessExclusiveFull float64 `mapstructure:"base_access_exclusive_full"`
+	BaseExclusive           float64 `mapstructure:"base_exclusive"`
+	BaseShare               float64 `mapstructure:"base_share"`
 }
 
 // RiskAnalysisReport bundles the risk model results.
