@@ -17,8 +17,8 @@ for %%f in (%MIGRATIONS_DIR%\*.sql) do (
     echo.
     echo [파일 분석 중: !FILE_NAME!]
     
-    :: 도커 명령 실행
-    docker compose run --rm analyze-shell analyze /app/code/migrations/!FILE_NAME! --db %DB_URL% --sqlite %SQLITE_PATH%
+    :: Run docker command
+    docker compose run --rm analyze analyze /app/code/migrations/!FILE_NAME! --db %DB_URL% --sqlite %SQLITE_PATH%
 )
 
 echo.
