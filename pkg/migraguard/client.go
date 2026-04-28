@@ -113,3 +113,9 @@ func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisRe
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
 	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})
 }
+
+// Simulate creates a sandbox environment and seeds data based on a scenario.
+func (c *Client) Simulate(ctx context.Context, scenarioPath string) (string, error) {
+	simulateService := app.NewSimulateService(c.config.Verbose)
+	return simulateService.Run(ctx, scenarioPath)
+}

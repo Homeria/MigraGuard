@@ -1,0 +1,16 @@
+experiment_name: "exp_01_steady_normal"
+description: "AI 학습용: 안정적인 운영 환경의 베이스라인 (7일치)"
+target_table: "orders"
+pg_state:
+  table_size_mb: 5120
+  active_connections: 50
+  p99_time_ms: 10.0
+  current_tps: 500.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 400.0
+  peak_tps: 600.0
+  weekly_pattern: true
+  noise_variance: 0.05 # 낮은 노이즈 (안정적)
+  events: []
