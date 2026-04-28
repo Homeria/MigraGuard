@@ -26,7 +26,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["agent", "--tables", "orders,products,users"]
+    command: ["agent", "--tables", "account_balances,inventory_stocks,orders,products,users"]
     volumes:
       - migraguard-data:/app/data
       - ./migraguard.yaml:/app/migraguard.yaml
@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: build/docker/Dockerfile
     entrypoint: ["/app/loadgen"]
-    command: ["--db", "postgres://user:pass@db:5432/target_db", "--conns", "15", "--profile", "steady"]
+    command: ["--db", "postgres://user:pass@db:5432/target_db", "--conns", "20", "--profile", "steady"]
     depends_on:
       db:
         condition: service_healthy
