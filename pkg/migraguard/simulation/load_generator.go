@@ -30,6 +30,7 @@ type LoadGenerator struct {
 	stopChan    chan struct{}
 	browseCount uint64
 	orderCount  uint64
+	failCount   uint64
 }
 
 // NewLoadGenerator initializes the generator.
@@ -44,7 +45,7 @@ func NewLoadGenerator(dsn string, conns int, profile TrafficProfile) (*LoadGener
 
 // Run starts the workers and reporting loop.
 func (g *LoadGenerator) Run(ctx context.Context) {
-	log.Printf("[START] Starting Load Generator. Profile: [%s], Concurrency: %d", g.profile, g.conns)
+	log.Printf("[START] Starting Fintech Load Generator. Profile: [%s], Concurrency: %d", g.profile, g.conns)
 
 	go g.reportingLoop(ctx)
 
@@ -66,8 +67,9 @@ func (g *LoadGenerator) reportingLoop(ctx context.Context) {
 		case <-ticker.C:
 			browses := atomic.SwapUint64(&g.browseCount, 0)
 			orders := atomic.SwapUint64(&g.orderCount, 0)
+			fails := atomic.SwapUint64(&g.failCount, 0)
 			intensity := g.calculateHourlyIntensity()
-			log.Printf("[STAT] [Load Summary] 10s: Browse %d, Order %d | Intensity: %.2f", browses, orders, intensity)
+			log.Printf("[STAT] [Load Summary] 10s: Browse %d, Success %d, Fail %d | Intensity: %.2f", browses, orders, fails, intensity)
 		}
 	}
 }
@@ -104,29 +106,30 @@ func (g *LoadGenerator) executeScenario(ctx context.Context, intensity float64) 
 		if r < 0.95 {
 			g.browse(ctx)
 		} else {
-			g.order(ctx)
+			g.orderTransaction(ctx)
 		}
 	case ProfileFlashSale:
 		if r < 0.3 {
 			g.browse(ctx)
 		} else {
-			g.order(ctx)
+			g.orderTransaction(ctx)
 		}
 	default:
 		if r < 0.7 {
 			g.browse(ctx)
 		} else {
-			g.order(ctx)
+			g.orderTransaction(ctx)
 		}
 	}
 }
 
 func (g *LoadGenerator) browse(ctx context.Context) {
-	userID := rand.Intn(100) + 1
+	userID := rand.Intn(1000) + 1
 	var username string
 	_ = g.db.QueryRowContext(ctx, "SELECT username FROM users WHERE id = $1", userID).Scan(&username)
+	
 	category := ARRAY_CATEGORIES[rand.Intn(len(ARRAY_CATEGORIES))]
-	rows, _ := g.db.QueryContext(ctx, "SELECT name, price FROM products WHERE category = $1 LIMIT 10", category)
+	rows, _ := g.db.QueryContext(ctx, "SELECT p.name, p.price, s.stock_quantity FROM products p JOIN inventory_stocks s ON p.id = s.product_id WHERE p.category = $1 LIMIT 10", category)
 	if rows != nil {
 		rows.Close()
 	}
@@ -135,21 +138,63 @@ func (g *LoadGenerator) browse(ctx context.Context) {
 
 var ARRAY_CATEGORIES = []string{"Electronics", "Clothing", "Books", "Home"}
 
-func (g *LoadGenerator) order(ctx context.Context) {
-	tx, err := g.db.BeginTx(ctx, nil)
+// orderTransaction represents a complex fintech transaction flow.
+func (g *LoadGenerator) orderTransaction(ctx context.Context) {
+	tx, err := g.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
+		atomic.AddUint64(&g.failCount, 1)
 		return
 	}
 	defer tx.Rollback()
-	userID, productID, qty := rand.Intn(100)+1, rand.Intn(50)+1, rand.Intn(2)+1
-	var orderID int
-	err = tx.QueryRowContext(ctx, "INSERT INTO orders (user_id, total_amount, status) VALUES ($1, $2, 'paid') RETURNING id", userID, float64(qty)*100.0).Scan(&orderID)
+
+	userID := rand.Intn(1000) + 1
+	productID := rand.Intn(500) + 1
+	qty := 1
+	price := 100.0
+
+	// 1. Check & Update Inventory (Contention Point)
+	res, err := tx.ExecContext(ctx, "UPDATE inventory_stocks SET stock_quantity = stock_quantity - $1 WHERE product_id = $2 AND stock_quantity >= $1", qty, productID)
 	if err != nil {
+		atomic.AddUint64(&g.failCount, 1)
 		return
 	}
-	_, _ = tx.ExecContext(ctx, "INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, 100.0)", orderID, productID, qty)
-	_, _ = tx.ExecContext(ctx, "UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2 AND stock_quantity >= $1", qty, productID)
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		atomic.AddUint64(&g.failCount, 1)
+		return
+	}
+
+	// 2. Update Balance (Hot Spot)
+	res, err = tx.ExecContext(ctx, "UPDATE account_balances SET balance = balance - $1, last_updated_at = CURRENT_TIMESTAMP WHERE user_id = $2 AND balance >= $1", price, userID)
+	if err != nil {
+		atomic.AddUint64(&g.failCount, 1)
+		return
+	}
+	affected, _ = res.RowsAffected()
+	if affected == 0 {
+		atomic.AddUint64(&g.failCount, 1)
+		return
+	}
+
+	// 3. Create Order (Heavy Body)
+	orderNo := fmt.Sprintf("ORD-%d-%d", time.Now().UnixNano(), idCounter)
+	atomic.AddUint64(&idCounter, 1)
+	
+	var orderID int64
+	err = tx.QueryRowContext(ctx, "INSERT INTO orders (order_no, user_id, total_amount, status, order_details) VALUES ($1, $2, $3, 'PAID', '{\"source\": \"sim\"}') RETURNING id", orderNo, userID, price).Scan(&orderID)
+	if err != nil {
+		atomic.AddUint64(&g.failCount, 1)
+		return
+	}
+
+	// 4. Record Log (Massive Log)
+	_, _ = tx.ExecContext(ctx, "INSERT INTO order_event_logs (order_id, event_type, raw_payload) VALUES ($1, 'PAYMENT_SUCCESS', '{\"sim\": true}')", orderID)
+
 	if err := tx.Commit(); err == nil {
 		atomic.AddUint64(&g.orderCount, 1)
+	} else {
+		atomic.AddUint64(&g.failCount, 1)
 	}
 }
+
+var idCounter uint64

@@ -1,0 +1,646 @@
+🚀 모든 DDL 파일에 대한 리스크 분석을 시작합니다...
+📂 검색 경로: ./migrations
+
+================================================================================
+🔍 분석 중: 001_safe_add_column_orders.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE orders ADD COLUMN promo_id varchar(20)
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=ALTER TABLE (ADD COLUMN) | Rewrite=false | Columns=[promo_id]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.05 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 1822.57 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 102
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 002_safe_add_column_users.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: users
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE users ADD COLUMN bio text
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=ALTER TABLE (ADD COLUMN) | Rewrite=false | Columns=[bio]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 130.32 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 108.60 | 24h Peak: 108.86
+  - Active Conns: 0 | Table Size: 0.27 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 131.55 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 17
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 003_safe_index_concurrently_logs.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: order_event_logs
+================================================================================
+ [CODE] Raw SQL: CREATE INDEX CONCURRENTLY idx_logs_created_at_async ON order_event_logs USING btree (created_at)
+ [STATUS] Level=[32mSafe[0m | Risk Score=0.00%
+ [TASK] Type=CREATE INDEX (CREATE INDEX CONCURRENTLY) | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 0.00 (Real-time)
+  - Real-time TPS: 0.00 | 1h Avg: 0.00 | 24h Peak: 0.00
+  - Active Conns: 0 | Table Size: 37.23 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 73.21 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 004_safe_set_default_products.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: products
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE products ALTER COLUMN description SET DEFAULT 'No description available'
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=ALTER TABLE | Rewrite=false | Columns=[description]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 130.32 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 108.60 | 24h Peak: 108.87
+  - Active Conns: 0 | Table Size: 0.10 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 119.36 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 15
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 005_safe_drop_default_balances.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: account_balances
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE account_balances ALTER COLUMN currency DROP DEFAULT
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=ALTER TABLE | Rewrite=false | Columns=[currency]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.89
+  - Active Conns: 0 | Table Size: 0.15 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 115.60 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 6
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 006_warning_standard_index_orders.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: CREATE INDEX idx_orders_status ON orders USING btree (status)
+ [STATUS] Level=[32mSafe[0m | Risk Score=20.00%
+ [TASK] Type=CREATE INDEX | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.09 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 911.29 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 51
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 007_warning_rename_column_products.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: products
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE products RENAME COLUMN category TO prod_category
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=RENAME (RENAME OBJECT) | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 130.32 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 108.60 | 24h Peak: 108.87
+  - Active Conns: 0 | Table Size: 0.10 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 119.36 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 15
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 008_warning_add_check_not_valid.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE orders ADD CONSTRAINT check_total_positive CHECK (total_amount > 0) NOT VALID
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=ALTER TABLE (ADD CONSTRAINT (NOT VALID)) | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.09 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 1822.57 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 102
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 009_warning_increase_varchar_length.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: users
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE users ALTER COLUMN username TYPE varchar(100)
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (CHANGE COLUMN TYPE) | Rewrite=true | Columns=[username]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 130.32 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 108.60 | 24h Peak: 108.86
+  - Active Conns: 0 | Table Size: 0.27 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 2.66 ms
+  - Step 2 [T_block] Estimated Blocking Time: 34.21 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 4
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 010_warning_drop_index_balances.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: idx_order_logs_order_id
+================================================================================
+ [CODE] Raw SQL: DROP INDEX IF EXISTS idx_order_logs_order_id
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=DROP | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 0.00 (Real-time)
+  - Real-time TPS: 0.00 | 1h Avg: 0.00 | 24h Peak: 0.00
+  - Active Conns: 0 | Table Size: 5.13 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 112.22 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 011_danger_rewrite_order_no.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE orders ALTER COLUMN order_no TYPE text
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (CHANGE COLUMN TYPE) | Rewrite=true | Columns=[order_no]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.12 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 301.17 ms
+  - Step 2 [T_block] Estimated Blocking Time: 2023.74 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 113
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 012_danger_set_not_null_stocks.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: inventory_stocks
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE inventory_stocks ALTER COLUMN warehouse_id SET NOT NULL
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (SET NOT NULL) | Rewrite=true | Columns=[warehouse_id]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 186.39 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 155.32 | 24h Peak: 155.72
+  - Active Conns: 0 | Table Size: 0.09 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 0.94 ms
+  - Step 2 [T_block] Estimated Blocking Time: 11.80 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 2
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 013_danger_add_unique_constraint.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: users
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE users ADD CONSTRAINT unique_email_alt UNIQUE (email)
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (ADD CONSTRAINT) | Rewrite=true | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 130.32 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 108.60 | 24h Peak: 108.86
+  - Active Conns: 0 | Table Size: 0.27 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 2.66 ms
+  - Step 2 [T_block] Estimated Blocking Time: 34.21 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 4
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 014_danger_truncate_logs.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: order_event_logs
+================================================================================
+ [CODE] Raw SQL: TRUNCATE order_event_logs
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=TRUNCATE | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 0.00 (Real-time)
+  - Real-time TPS: 0.00 | 1h Avg: 0.00 | 24h Peak: 0.00
+  - Active Conns: 0 | Table Size: 37.25 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 732.09 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 015_danger_drop_table_balances.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: account_balances
+================================================================================
+ [CODE] Raw SQL: DROP TABLE account_balances
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=DROP | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.89
+  - Active Conns: 0 | Table Size: 0.15 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 115.60 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 6
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 016_danger_change_user_id_type.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE orders ALTER COLUMN user_id TYPE bigint
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (CHANGE COLUMN TYPE) | Rewrite=true | Columns=[user_id]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.14 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 301.41 ms
+  - Step 2 [T_block] Estimated Blocking Time: 2023.98 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 113
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 017_danger_rename_table_orders.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: orders
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE orders RENAME TO customer_orders
+ [STATUS] Level=[32mSafe[0m | Risk Score=30.00%
+ [TASK] Type=RENAME (RENAME OBJECT) | Rewrite=false | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.88
+  - Active Conns: 0 | Table Size: 30.14 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 100.00 ms
+  - Step 2 [T_block] Estimated Blocking Time: 1822.57 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 102
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [SAFE] Deployment looks safe under current workload.
+================================================================================
+
+================================================================================
+🔍 분석 중: 018_danger_add_foreign_key.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: order_event_logs
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE order_event_logs ADD CONSTRAINT fk_order_logs FOREIGN KEY (order_id) REFERENCES orders (id)
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (ADD CONSTRAINT) | Rewrite=true | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 0.00 (Real-time)
+  - Real-time TPS: 0.00 | 1h Avg: 0.00 | 24h Peak: 0.00
+  - Active Conns: 0 | Table Size: 37.28 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 372.81 ms
+  - Step 2 [T_block] Estimated Blocking Time: 1004.90 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 019_danger_full_table_scan_check.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: order_event_logs
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE order_event_logs ADD CONSTRAINT check_event_type CHECK (event_type IS NOT NULL)
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (ADD CONSTRAINT) | Rewrite=true | Columns=[]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 0.00 (Real-time)
+  - Real-time TPS: 0.00 | 1h Avg: 0.00 | 24h Peak: 0.00
+  - Active Conns: 0 | Table Size: 37.28 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 372.81 ms
+  - Step 2 [T_block] Estimated Blocking Time: 1004.90 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+================================================================================
+🔍 분석 중: 020_danger_reorder_columns.sql
+================================================================================
+
+================================================================================
+ [REPORT] MigraGuard Risk Analysis: account_balances
+================================================================================
+ [CODE] Raw SQL: ALTER TABLE account_balances ADD COLUMN frozen_at timestamp, ALTER COLUMN balance SET NOT NULL
+ [STATUS] Level=[31mDanger[0m | Risk Score=85.00%
+ [TASK] Type=ALTER TABLE (SET NOT NULL) | Rewrite=true | Columns=[frozen_at balance]
+
+ [TRAFFIC] Traffic Data
+  - Baseline TPS (Lambda): 56.07 (1h-Avg (x1.2))
+  - Real-time TPS: 0.00 | 1h Avg: 46.72 | 24h Peak: 46.89
+  - Active Conns: 0 | Table Size: 0.15 MB
+
+ [METRICS] 5-Step Risk Metrics
+  - Step 1 [T_ddl]   Estimated DDL Time: 1.48 ms
+  - Step 2 [T_block] Estimated Blocking Time: 17.08 ms
+  - Step 3 [C_peak]  Predicted Peak Connections: 0
+  - Step 4 [T_rec]   Estimated Recovery Time: 0.00 ms (Failure: false)
+
+ [QUERIES] Top Resource Heavy Queries
+  - [27.6%] SELECT p.name, p.price, s.stock_quantity FROM products p ... (ID: -8308452976366026087)
+  - [21.4%] INSERT INTO orders (order_no, user_id, total_amount, stat... (ID: 6308088094684610342)
+  - [14.4%] SELECT username FROM users WHERE id = $1 (ID: 8271824998755730274)
+
+ [ADVICE] Recommendation
+  [WARNING] Consider delaying until the golden window: [11:00] (Est. 93.2 TPS)
+================================================================================
+
+[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.
+
+✅ 분석 완료! 총 20 개의 파일을 처리했습니다.
