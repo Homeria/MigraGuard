@@ -1,0 +1,21 @@
+experiment_name: "exp_04_heavy_log_insert"
+description: "AI 학습용: 대규모 로그 테이블의 지속적 성장 및 부하 시뮬레이션"
+target_table: "order_event_logs"
+pg_state:
+  table_size_mb: 102400 # 100GB
+  active_connections: 100
+  p99_time_ms: 25.0
+  current_tps: 2000.0
+sqlite_history:
+  days: 14 # 긴 연구 기간
+  interval_minutes: 5 # 대량 데이터는 간격 조절
+  base_tps: 1500.0
+  peak_tps: 2500.0
+  weekly_pattern: true
+  noise_variance: 0.02
+  events:
+    - name: "Batch Job"
+      start_day: 5
+      start_hour: 0
+      duration_h: 4
+      multiplier: 2.5

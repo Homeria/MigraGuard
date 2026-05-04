@@ -1,0 +1,16 @@
+experiment_name: "exp_08_massive_table_rewrite"
+description: "연구용: 500GB 규모의 초거대 테이블 리라이트 시간 예측 및 분석 지연 측정"
+target_table: "orders"
+pg_state:
+  table_size_mb: 512000 # 500GB
+  active_connections: 50
+  p99_time_ms: 20.0
+  current_tps: 800.0
+sqlite_history:
+  days: 30 # 장기 데이터 축적
+  interval_minutes: 10
+  base_tps: 500.0
+  peak_tps: 1200.0
+  weekly_pattern: true
+  noise_variance: 0.05
+  events: []

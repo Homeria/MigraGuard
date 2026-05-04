@@ -13,6 +13,7 @@ import (
 var (
 	analyzeDbString   string
 	analyzeSqlitePath string
+	analyzeSandbox    string
 	analyzeOutput     string
 )
 
@@ -21,6 +22,7 @@ func init() {
 
 	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "Target PostgreSQL connection string")
 	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "", "Local metric storage (SQLite) path")
+	analyzeCmd.Flags().StringVarP(&analyzeSandbox, "sandbox", "s", "", "Path to SQLite simulation sandbox (Offline Mode)")
 	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
 }
 
@@ -34,29 +36,33 @@ var analyzeCmd = &cobra.Command{
 
 		// 1. Resolve connection info
 		finalDB := analyzeDbString
-		if finalDB == "" {
-			finalDB = GlobalConfig.Database.Postgres
-		}
-		if finalDB == "" {
-			fmt.Println("[ERROR] PostgreSQL connection string is required.")
-			os.Exit(1)
+		if analyzeSandbox == "" {
+			if finalDB == "" {
+				finalDB = GlobalConfig.Database.Postgres
+			}
+		} else {
+			// In sandbox mode, we don't need a real PG connection during New()
+			finalDB = ""
 		}
 
 		finalSQLite := analyzeSqlitePath
-		if finalSQLite == "" {
-			finalSQLite = GlobalConfig.Database.SQLite
-		}
-		if finalSQLite == "" {
-			finalSQLite = "migraguard.db"
+		if analyzeSandbox != "" {
+			finalSQLite = analyzeSandbox
+		} else {
+			if finalSQLite == "" {
+				finalSQLite = GlobalConfig.Database.SQLite
+			}
+			if finalSQLite == "" {
+				finalSQLite = "migraguard.db"
+			}
 		}
 
-		// 2. Initialize client with GlobalConfig (which includes YAML/Env)
-		// Functional options can be used here for specific flag overrides if needed
+		// 2. Initialize client
 		mg, err := migraguard.New(migraguard.Config{
 			PostgresDSN: finalDB,
 			SQLitePath:  finalSQLite,
 			Verbose:     Verbose,
-			Risk:        GlobalConfig.Risk.ToRiskConstants(), // Map GlobalConfig to SDK constants
+			Risk:        GlobalConfig.Risk.ToRiskConstants(),
 		})
 		if err != nil {
 			fmt.Printf("[ERROR] MigraGuard initialization failed: %v\n", err)
@@ -64,14 +70,23 @@ var analyzeCmd = &cobra.Command{
 		}
 		defer mg.Close()
 
-		// 3. Run analysis
+		// 3. Switch to Sandbox Mode if requested
+		if analyzeSandbox != "" {
+			if err := mg.UseSandbox(analyzeSandbox); err != nil {
+				fmt.Printf("[ERROR] Failed to load sandbox: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("[INFO] Offline Mode: Using sandbox data from %s\n", analyzeSandbox)
+		}
+
+		// 4. Run analysis
 		resp, err := mg.Analyze(ctx, filePath)
 		if err != nil {
 			fmt.Printf("[ERROR] Analysis failed: %v\n", err)
 			os.Exit(1)
 		}
 
-		// 4. Output results
+		// 5. Output results
 		var rpt reporter.Reporter
 		if analyzeOutput == "markdown" {
 			rpt = reporter.NewMarkdownReporter()
@@ -84,7 +99,7 @@ var analyzeCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// 5. Gatekeeping
+		// 6. Gatekeeping
 		for _, r := range resp.Reports {
 			if r.RiskLevel == "Danger" {
 				fmt.Println("\n[DANGER] High-risk migration detected. Deployment pipeline forcibly blocked.")

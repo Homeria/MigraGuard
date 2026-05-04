@@ -1,0 +1,16 @@
+experiment_name: "exp_07_connection_starvation"
+description: "연구용: TPS는 낮으나 연결 수(Connections)가 이미 임계치인 유휴 부하 상황"
+target_table: "inventory_stocks"
+pg_state:
+  table_size_mb: 256
+  active_connections: 498 # C_max(500) 직전
+  p99_time_ms: 15.0
+  current_tps: 200.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 150.0
+  peak_tps: 300.0
+  weekly_pattern: true
+  noise_variance: 0.1
+  events: []

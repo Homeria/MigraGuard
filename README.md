@@ -8,139 +8,77 @@
 
 ## 🏗️ 아키텍처 (Dual-Process Architecture)
 
-MigraGuard v3.2는 데이터 수집의 지속성과 분석의 즉각성을 보장하기 위해 **이중 프로세스 구조**로 설계되었습니다.
+MigraGuard v3.8은 데이터 수집의 지속성과 분석의 즉각성을 보장하기 위해 **이중 프로세스 구조**로 설계되었습니다.
 
 1.  **MigraGuard Agent (Background Service)**
     *   운영 DB의 `pg_stat_statements` 및 시스템 뷰를 정기적으로 스캐닝.
     *   수집된 메트릭을 내장 SQLite(`migraguard.db`)에 시계열 데이터로 적재.
-    *   최근 1시간 평균, 24시간 피크 트래픽 등 과거 이력 데이터 관리.
 2.  **MigraGuard Analyze (CLI / CI-CD)**
     *   개발자의 SQL 파일을 AST(Abstract Syntax Tree)로 파싱하여 분석.
-    *   Agent가 수집한 과거/실시간 지표를 기반으로 **5단계 리스크 엔진** 가동.
-    *   위험 점수가 높을 경우 `Exit 1`을 반환하여 배포 파이프라인(GitHub Actions 등) 자동 차단.
+    *   Agent가 수집한 지표 또는 **시뮬레이션 샌드박스 데이터**를 기반으로 분석 수행.
+    *   위험 점수가 높을 경우 `Exit 1`을 반환하여 배포 파이프라인 자동 차단.
 
 ---
 
-## 🎯 캡스톤 디자인 구현 범위 (v3.2 핵심 기능)
+## 🎯 핵심 기능 (v3.8)
 
-본 프로젝트는 캡스톤 디자인 최종 결과물로서 아래 기능을 완벽히 구현하였습니다.
-
-### 1. SQL 정적 분석 (AST Parsing)
-*   `pganalyze/pg_query_go`를 활용하여 PostgreSQL 공식 파서와 100% 호환되는 구문 분석.
-*   `ALTER TABLE`, `CREATE INDEX` 등 DDL 수행 시 **Table Rewrite(재작성)** 발생 여부 자동 판별.
-*   대상 테이블 및 컬럼 존재 여부에 대한 스키마 사전 검증(Validation).
-
-### 2. 5단계 정밀 리스크 모델 (Risk Engine)
-단순한 룰 기반 탐지를 넘어, 대기 행렬 이론(Queuing Theory)을 응용한 수학적 모델링을 수행합니다.
+### 1. 5단계 정밀 리스크 모델 (Risk Engine)
 *   **Step 1. $T_{ddl}$ 예측:** 테이블 크기 및 디스크 I/O 성능 기반 예상 작업 시간 산출.
-*   **Step 2. $T_{block}$ 예측:** $T_{ddl}$ + P99 응답 시간 + 복제 지연(Lag)을 합산한 총 블로킹 시간 도출.
-*   **Step 3. $C_{peak}$ 예측:** 블로킹 중 유입될 신규 커넥션 폭증량($\lambda \times T_{block}$) 계산.
-*   **Step 4. $T_{rec}$ 예측:** 시스템 한계($C_{max}$) 초과 시 서비스 정상화까지 걸리는 회복 시간 예측.
-*   **Step 5. Risk Score:** 최종 부하량 가중치($\lambda_{final}$)를 적용하여 **Safe / Warning / Danger** 판정.
+*   **Step 2. $T_{block}$ 예측:** $T_{ddl}$ + P99 응답 시간 + 복제 지연(Lag) 합산.
+*   **Step 3. $C_{peak}$ 예측:** 블로킹 중 유입될 신규 커넥션 폭증량 계산.
+*   **Step 4. $T_{rec}$ 예측:** 시스템 한계 초과 시 서비스 정상화까지의 회복 시간 예측.
+*   **Step 5. Risk Score:** 보수적 가중치를 적용하여 **Safe / Warning / Danger** 판정.
+
+### 2. 시뮬레이션 샌드박스 및 가상화 (Research Ready)
+*   **Scenario Seeder:** YAML 기반으로 7일치 가상 데이터를 1초 만에 생성.
+*   **Offline Analysis:** 실제 DB 없이 샌드박스 데이터만으로 오프라인 리스크 평가 수행 (`--sandbox`).
+*   **Multi-Platform Automation:** Windows CMD, PowerShell, Bash용 통합 자동화 스크립트 제공.
 
 ### 3. 지능형 워크로드 분석
-*   **Weighted TPS:** `Max(실시간, 1시간 평균 * 1.2, 24시간 피크 * 0.8)` 공식을 통한 보수적 위험 평가.
-*   **Safe Window 추천:** 최근 24시간 트래픽 패턴을 분석하여 배포에 가장 안전한 시간대(저부하 시간) 자동 추천.
-
-### 4. 유연한 리포팅 및 CI/CD 통합
-*   **Console UI:** 터미널에서 즉시 확인 가능한 컬러풀한 테이블 리포트.
-*   **Markdown Export:** PR 코멘트용 상세 분석 보고서 자동 생성.
-*   **Custom Constants:** 인프라 사양(Disk I/O, Max Connections)에 맞춘 분석 상수 커스터마이징.
+*   **Weighted TPS:** 실시간, 1시간 평균, 24시간 피크 상황을 교차 분석하여 최악의 시나리오 가정.
+*   **Safe Window 추천:** 배포에 가장 안전한 저부하 시간대 자동 추천.
 
 ---
 
-## 🐳 Docker로 실행하기 (Recommended)
+## 🧪 독립형 시나리오 실험 (Sandbox Mode)
 
-MigraGuard는 운영 데이터베이스(PostgreSQL)와 함께 컨테이너 환경에서 실행하는 것이 가장 권장됩니다.
+실제 DB 없이 가상의 장애 상황을 재현하고 검증할 때 사용합니다.
 
-### 1. 전체 환경 실행 (Agent + Sample DB)
-`docker-compose.yml`을 사용하여 샘플 데이터베이스와 분석 에이전트를 한 번에 띄웁니다.
-```bash
-docker compose up -d
+```cmd
+:: 1. 샌드박스 데이터 생성 및 분석 (윈도우 CMD)
+scripts\cmd\sandbox.bat 03_spike_flash_sale.yaml 011_danger_rewrite_order_no.sql
+
+:: 2. 모든 연구 시나리오 일괄 시드 주입
+scripts\cmd\seed_all.bat
 ```
 
-### 2. 특정 SQL 분석 실행 (Analyze)
-에이전트가 실행 중인 상태에서, 공유 볼륨을 통해 실시간 데이터를 기반으로 분석을 수행합니다.
-```bash
-# 로컬의 SQL 파일을 컨테이너를 통해 분석
-docker compose run --rm analyze-shell analyze /app/code/migrations/001_heavy_alter.sql
-```
+모든 실험 자산은 `experiments/` 워크스페이스(Scenarios, DDL, Data)에서 통합 관리됩니다.
 
 ---
 
 ## 🛠️ 시작하기 (Quick Start)
 
-### 1. 전제 조건
-*   **PostgreSQL:** `pg_stat_statements` 확장 설치 및 활성화 필요.
-*   **Go:** v1.25 이상 권장.
-
-### 2. 설정 파일 작성 (`migraguard.yaml`)
-프로젝트 루트 또는 실행 경로에 설정 파일을 작성합니다.
-
-```yaml
-database:
-  postgres: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"
-  sqlite: "./migraguard.db"
-
-agent:
-  interval: "1m"       # 지표 수집 주기
-  retention_days: 7    # 데이터 보관 기간
-
-risk:
-  disk_io: 104857600   # 100MB/s (Table Rewrite 시간 계산용)
-  c_max: 500           # DB 최대 커넥션 수
-  mu_max: 5000.0       # 시스템 한계 TPS
-  t_meta: 100.0        # 메타데이터 변경 기본 지연시간 (ms)
-```
-
-### 3. 에이전트 실행 (수집 모드)
-운영 환경 또는 모니터링 서버에서 상시 실행합니다.
+### 1. 에이전트 실행 (수집 모드)
 ```bash
 ./migraguard agent
 ```
 
-### 4. 리스크 분석 실행 (분석 모드)
-마이그레이션 SQL 파일을 대상으로 분석을 수행합니다.
+### 2. 리스크 분석 실행 (분석 모드)
 ```bash
-# 기본 콘솔 출력
+# 실시간 데이터 기반 분석
 ./migraguard analyze ./migrations/001_heavy_alter.sql
 
-# 마크다운 파일로 저장 (CI용)
-./migraguard analyze ./migrations/001_heavy_alter.sql --format markdown > report.md
-
-# 상세 로그 포함
-./migraguard analyze ./migrations/001_heavy_alter.sql --verbose
+# 시뮬레이션 샌드박스 기반 오프라인 분석
+./migraguard analyze ./experiments/ddl/001_sql.sql --sandbox ./experiments/data/spike.db
 ```
 
 ---
 
-## 🚀 CI/CD 적용 예시 (GitHub Actions)
+## 📚 상세 문서 (Documentation)
 
-```yaml
-steps:
-  - name: Run MigraGuard Analysis
-    run: |
-      ./migraguard analyze ./deploy/schema_update.sql --format markdown > risk_report.md
-    continue-on-error: false # 위험(Danger) 판정 시 빌드 중단
-
-  - name: Comment PR
-    uses: thollander/actions-comment-pull-request@v2
-    with:
-      filePath: risk_report.md
-```
-
----
-
-## 📚 문서 및 상세 설계 (Documentation)
-
-MigraGuard는 캡스톤 디자인의 공학적 설계 원칙에 따라 체계적으로 문서화되어 있습니다. 모든 문서는 `docs/` 디렉토리에서 확인할 수 있습니다.
-
-- **[요구사항 정의서]** [`docs/01_requirements/user_stories.md`](docs/01_requirements/user_stories.md)
-- **[시스템 아키텍처]** [`docs/02_architecture/system_overview.md`](docs/02_architecture/system_overview.md)
-  - **[핵심 설계도]** [`docs/02_architecture/uml_diagrams/05_holistic_implementation_map.md`](docs/02_architecture/uml_diagrams/05_holistic_implementation_map.md)
+- **[시뮬레이션 샌드박스 운용 가이드]** [`docs/04_guides/sandbox_manual.md`](docs/04_guides/sandbox_manual.md)
+- **[시스템 아키텍처 개요]** [`docs/02_architecture/system_overview.md`](docs/02_architecture/system_overview.md)
 - **[구현 상세 명세]** [`docs/03_implementation/parser_logic.md`](docs/03_implementation/parser_logic.md)
-- **[운용 및 시뮬레이션 가이드]** [`docs/04_guides/simulation_manual.md`](docs/04_guides/simulation_manual.md)
-- **[형상 관리 전략]** [`docs/05_project_process/branch_strategy.md`](docs/05_project_process/branch_strategy.md)
 
 ---
 

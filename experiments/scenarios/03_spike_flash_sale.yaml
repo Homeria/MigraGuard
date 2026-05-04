@@ -1,0 +1,31 @@
+experiment_name: "exp_03_spike_flash_sale"
+description: "AI 학습용: 반복적인 기습 타임세일 패턴 주입 (Anomaly Detection용)"
+target_table: "inventory_stocks"
+pg_state:
+  table_size_mb: 512
+  active_connections: 450
+  p99_time_ms: 50.0
+  current_tps: 4500.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 300.0
+  peak_tps: 1500.0
+  weekly_pattern: false
+  noise_variance: 0.15
+  events:
+    - name: "Flash Sale 1"
+      start_day: 1
+      start_hour: 20
+      duration_h: 1
+      multiplier: 8.5 # 8.5배 폭증
+    - name: "Flash Sale 2"
+      start_day: 3
+      start_hour: 12
+      duration_h: 1
+      multiplier: 10.0 # 극단적 폭증
+    - name: "Weekend Event"
+      start_day: 6
+      start_hour: 18
+      duration_h: 4
+      multiplier: 3.5

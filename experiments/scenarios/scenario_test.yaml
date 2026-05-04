@@ -1,0 +1,29 @@
+experiment_name: "fintech_spike_research"
+description: "Fintech core load simulation with a sudden flash sale spike"
+target_table: "account_balances"
+
+pg_state:
+  table_size_mb: 5120
+  active_connections: 45
+  p99_time_ms: 15.5
+  current_tps: 1200
+  replication_lag_s: 0.2
+
+sqlite_history:
+  days: 7
+  interval_minutes: 60
+  base_tps: 800
+  peak_tps: 2500
+  weekly_pattern: true
+  noise_variance: 0.1
+  events:
+    - name: "Flash Sale Day 3"
+      start_day: 3
+      start_hour: 14
+      duration_h: 4
+      multiplier: 3.5
+    - name: "Midnight Maintenance Day 5"
+      start_day: 5
+      start_hour: 2
+      duration_h: 2
+      multiplier: 0.2

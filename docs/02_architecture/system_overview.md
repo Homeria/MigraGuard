@@ -15,12 +15,19 @@ MigraGuard is designed as a reusable library (SDK) that can be embedded into var
     - **Analyzer**: `sql_parser.go`, `risk_calculator.go`, `risk_evaluator.go`.
     - **Collector**: `metric_collector.go` for background data harvesting.
     - **Infra**: Database adapters for PostgreSQL and SQLite.
+    - **Virtualization**: `VirtualPGAdapter` for offline simulation analysis.
 
 ### 1.2. Architecture Layers
 1. **Interface Layer**: CLI (`cmd/`), MCP Server, or API.
 2. **SDK Layer**: The public `Client` interface (`pkg/migraguard`).
 3. **Domain Layer**: Core logic and algorithms (`internal/analyzer`, `collector`).
 4. **Adapter Layer**: Communication with external systems (`internal/infra`).
+
+### 1.3. Research Workspace (New!)
+The `experiments/` directory provides a structured environment for off-line research:
+- `scenarios/`: YAML-based load profiles.
+- `ddl/`: Research-specific migration SQL cases.
+- `data/`: Persistence layer for generated SQLite sandboxes.
 
 ---
 
