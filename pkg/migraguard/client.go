@@ -28,8 +28,8 @@ type Option func(*Config)
 // Client is the main entry point for all MigraGuard features.
 type Client struct {
 	config *Config
-	pg     *postgres.PostgresAdapter
-	sqlite *sqlite.SQLiteAdapter
+	pg     types.PostgresClient
+	sqlite types.SQLiteClient
 }
 
 // New creates a new MigraGuard client with optional overrides.
@@ -101,6 +101,24 @@ func WithWarningThreshold(t float64) Option {
 	return func(c *Config) { c.Risk.ThresholdWarning = t }
 }
 
+// UseSandbox switches the client to use a VirtualPGAdapter backed by the provided SQLite path.
+func (c *Client) UseSandbox(sandboxPath string) error {
+	sandboxRepo, err := sqlite.NewRepository(sandboxPath)
+	if err != nil {
+		return fmt.Errorf("failed to load sandbox: %w", err)
+	}
+	
+	// Replace PG adapter with Virtual adapter
+	c.pg = sqlite.NewVirtualPGAdapter(sandboxRepo)
+	
+	// Close current sqlite and replace with sandbox sqlite
+	if c.sqlite != nil {
+		c.sqlite.Close()
+	}
+	c.sqlite = sandboxRepo
+	return nil
+}
+
 // Close releases all resources.
 func (c *Client) Close() error {
 	if c.pg != nil { c.pg.Close() }
@@ -121,7 +139,7 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 // Analyze performs the analysis.
 func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisResponse, error) {
 	if c.pg == nil {
-		return nil, fmt.Errorf("analysis requires a valid PostgreSQL connection (use --sandbox for offline mode)")
+		return nil, fmt.Errorf("analysis requires a valid PostgreSQL connection or --sandbox mode")
 	}
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
 	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})
