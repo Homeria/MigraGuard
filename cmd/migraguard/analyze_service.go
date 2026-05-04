@@ -95,6 +95,13 @@ var analyzeCmd = &cobra.Command{
 			rpt = reporter.NewMarkdownReporter()
 		case "csv":
 			csvRpt := reporter.NewCSVReporter()
+			csvRpt.SQLFile = filePath
+			if analyzeSandbox != "" {
+				csvRpt.Scenario = analyzeSandbox
+			} else {
+				csvRpt.Scenario = "live"
+			}
+
 			if !noHeader {
 				// Use the writer from CSVReporter to print header to the same output
 				csvRpt.Writer.Write(csvRpt.GetHeader())

@@ -12,7 +12,9 @@ import (
 
 // CSVReporter outputs analysis results in a flat CSV format for research data processing.
 type CSVReporter struct {
-	Writer *csv.Writer
+	Writer   *csv.Writer
+	Scenario string
+	SQLFile  string
 }
 
 // NewCSVReporter initializes a new CSV reporter.
@@ -24,9 +26,6 @@ func NewCSVReporter() *CSVReporter {
 
 // Write outputs the quantitative risk metrics to the configured writer.
 func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport) error {
-	// 1. Header (Only written if needed, usually handled by CLI or scripts to avoid duplicates in append mode)
-	// For raw SDK use, we'll provide a way to include it or just write data rows.
-	
 	now := time.Now().Format("2006-01-02 15:04:05")
 
 	for i, res := range results {
@@ -34,6 +33,8 @@ func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.Ris
 		
 		row := []string{
 			now,                                      // Timestamp
+			r.Scenario,                               // Scenario (Metadata)
+			r.SQLFile,                                // SQLFile (Metadata)
 			res.TableName,                            // TableName
 			res.Operation,                            // Operation
 			strconv.Itoa(res.LockLevel),               // LockLevel
@@ -64,5 +65,8 @@ func (r *CSVReporter) GetHeader() []string {
 		"Timestamp", "TableName", "Operation", "LockLevel", "RewriteRequired",
 		"RiskScore", "RiskLevel", "T_ddl", "T_block", "C_peak", "T_rec",
 		"BaseTPS", "TPSSource", "TableSize",
+	}
+}
+seTPS", "TPSSource", "TableSize",
 	}
 }
