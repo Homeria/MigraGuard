@@ -21,7 +21,7 @@ func NewSimulateService(verbose bool) *SimulateService {
 }
 
 // Run executes the simulation: loading scenario, creating sandbox, and seeding data.
-func (s *SimulateService) Run(ctx context.Context, scenarioPath string) (string, error) {
+func (s *SimulateService) Run(ctx context.Context, scenarioPath string, force bool) (string, error) {
 	// 1. Load Scenario YAML
 	content, err := os.ReadFile(scenarioPath)
 	if err != nil {
@@ -35,12 +35,20 @@ func (s *SimulateService) Run(ctx context.Context, scenarioPath string) (string,
 
 	// 2. Determine Sandbox DB Path
 	dbPath := fmt.Sprintf("%s.db", scenario.ExperimentName)
-	if s.Verbose {
-		fmt.Printf("[DEBUG] Creating sandbox database: %s\n", dbPath)
+
+	// 3. Conditional Seeding (Persistence Logic)
+	if _, err := os.Stat(dbPath); err == nil && !force {
+		if s.Verbose {
+			fmt.Printf("[INFO] Sandbox database already exists: %s. Skipping seeding (use --force to overwrite).\n", dbPath)
+		}
+		return dbPath, nil
 	}
 
-	// 3. Initialize Fresh Sandbox Database
-	// If exists, delete to ensure clean experiment (Portability & Reproducibility)
+	if s.Verbose {
+		fmt.Printf("[DEBUG] Initializing fresh sandbox database: %s\n", dbPath)
+	}
+
+	// If force or not exists, ensure clean start
 	os.Remove(dbPath)
 
 	adapter, err := sqlite.NewRepository(dbPath)
@@ -55,6 +63,6 @@ func (s *SimulateService) Run(ctx context.Context, scenarioPath string) (string,
 		return "", fmt.Errorf("failed to seed scenario data: %w", err)
 	}
 
-	fmt.Printf("[OK] Simulation Sandbox created: %s (%s)\n", dbPath, scenario.Description)
+	fmt.Printf("[OK] Simulation Sandbox seeded: %s (%s)\n", dbPath, scenario.Description)
 	return dbPath, nil
 }
