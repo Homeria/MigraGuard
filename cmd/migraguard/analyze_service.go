@@ -15,6 +15,7 @@ var (
 	analyzeSqlitePath string
 	analyzeSandbox    string
 	analyzeOutput     string
+	noHeader          bool
 )
 
 func init() {
@@ -23,7 +24,8 @@ func init() {
 	analyzeCmd.Flags().StringVar(&analyzeDbString, "db", "", "Target PostgreSQL connection string")
 	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "", "Local metric storage (SQLite) path")
 	analyzeCmd.Flags().StringVarP(&analyzeSandbox, "sandbox", "s", "", "Path to SQLite simulation sandbox (Offline Mode)")
-	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown)")
+	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown, csv)")
+	analyzeCmd.Flags().BoolVar(&noHeader, "no-header", false, "Do not print CSV header (only for --output csv)")
 }
 
 var analyzeCmd = &cobra.Command{
@@ -88,9 +90,18 @@ var analyzeCmd = &cobra.Command{
 
 		// 5. Output results
 		var rpt reporter.Reporter
-		if analyzeOutput == "markdown" {
+		switch analyzeOutput {
+		case "markdown":
 			rpt = reporter.NewMarkdownReporter()
-		} else {
+		case "csv":
+			csvRpt := reporter.NewCSVReporter()
+			if !noHeader {
+				// Use the writer from CSVReporter to print header to the same output
+				csvRpt.Writer.Write(csvRpt.GetHeader())
+				csvRpt.Writer.Flush()
+			}
+			rpt = csvRpt
+		default:
 			rpt = reporter.NewConsoleReporter()
 		}
 
