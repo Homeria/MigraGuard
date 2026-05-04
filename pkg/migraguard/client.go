@@ -44,13 +44,20 @@ func New(cfg Config, opts ...Option) (*Client, error) {
 	}
 
 	// 3. Initialize Adapters
-	pgAdapter, err := postgres.NewAdapter(cfg.PostgresDSN)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+	var pgAdapter *postgres.PostgresAdapter
+	var err error
+	if cfg.PostgresDSN != "" {
+		pgAdapter, err = postgres.NewAdapter(cfg.PostgresDSN)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+		}
 	}
 
 	sqliteRepo, err := sqlite.NewRepository(cfg.SQLitePath)
 	if err != nil {
+		if pgAdapter != nil {
+			pgAdapter.Close()
+		}
 		return nil, fmt.Errorf("failed to connect to sqlite: %w", err)
 	}
 
@@ -103,6 +110,9 @@ func (c *Client) Close() error {
 
 // StartAgent starts background collection.
 func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
+	if c.pg == nil {
+		return fmt.Errorf("agent service requires a valid PostgreSQL connection")
+	}
 	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays)
 	agent.SetTargetTables(targetTables)
 	return agent.Run(ctx)
@@ -110,6 +120,9 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 
 // Analyze performs the analysis.
 func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisResponse, error) {
+	if c.pg == nil {
+		return nil, fmt.Errorf("analysis requires a valid PostgreSQL connection (use --sandbox for offline mode)")
+	}
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
 	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})
 }
