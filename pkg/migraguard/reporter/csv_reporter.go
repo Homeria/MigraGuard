@@ -62,11 +62,8 @@ func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.Ris
 // GetHeader returns the standard CSV header for research data.
 func (r *CSVReporter) GetHeader() []string {
 	return []string{
-		"Timestamp", "TableName", "Operation", "LockLevel", "RewriteRequired",
+		"Timestamp", "Scenario", "SQLFile", "TableName", "Operation", "LockLevel", "RewriteRequired",
 		"RiskScore", "RiskLevel", "T_ddl", "T_block", "C_peak", "T_rec",
 		"BaseTPS", "TPSSource", "TableSize",
-	}
-}
-seTPS", "TPSSource", "TableSize",
 	}
 }

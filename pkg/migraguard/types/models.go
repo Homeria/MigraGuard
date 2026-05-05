@@ -29,12 +29,15 @@ type WorkloadSnapshot struct {
 
 // TableDynamicMetrics represents the real-time state of a table.
 type TableDynamicMetrics struct {
+	Timestamp         time.Time
 	TableName         string
 	TableSize         int64
 	ReplicationLag    float64
 	ActiveConnections int
 	P99Time           float64
 	TPS               float64
+	SharedBlksHit     int64
+	SharedBlksRead    int64
 }
 
 // BaselineStats represents historical workload patterns.

@@ -61,7 +61,9 @@ func (a *SQLiteAdapter) InitializeSchema() error {
 		replication_lag DOUBLE,
 		active_connections INTEGER,
 		p99_time DOUBLE,
-		tps DOUBLE
+		tps DOUBLE,
+		shared_blks_hit BIGINT,
+		shared_blks_read BIGINT
 	);
 	CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON table_metrics(timestamp);
 

@@ -1,6 +1,6 @@
 # 📊 MigraGuard 연구 데이터 추출 및 분석 가이드 (Research Guide)
 
-본 문서는 MigraGuard의 **일괄 배치 분석(Batch Research)** 기능을 통해 대규모 실험 데이터를 CSV로 추출하고, 이를 논문이나 보고서 작성을 위한 통계 자료로 활용하는 방법을 안내합니다.
+본 문서는 MigraGuard의 **일괄 배치 분석(Batch Research)** 기능을 통해 대규모 실험 데이터를 CSV로 추출하고, 제공되는 시각화 도구를 활용해 논문이나 보고서용 통계 자료를 생성하는 방법을 안내합니다.
 
 ---
 
@@ -8,32 +8,52 @@
 
 MigraGuard는 단순한 리스크 탐지 도구를 넘어, DDL과 트래픽 간의 상관관계를 정량적으로 연구할 수 있는 실험 플랫폼을 제공합니다. 
 
-*   **전수 조사(Exhaustive Analysis)**: 모든 시뮬레이션 시나리오(11종)에 대해 모든 테스트 DDL(20종)을 교차 분석하여 총 220개 이상의 정밀 데이터를 한 번에 확보합니다.
-*   **정량적 지표 추출**: 5단계 리스크 모델의 모든 중간 산출물($T_{ddl}, T_{block}, C_{peak}, T_{rec}$)을 소수점 단위까지 CSV로 추출합니다.
+*   **전수 조사(Exhaustive Analysis)**: 모든 시뮬레이션 시나리오에 대해 모든 테스트 DDL을 교차 분석하여 수백 개의 정밀 데이터를 한 번에 확보합니다.
+*   **시각화 자동화**: 추출된 CSV 데이터를 바탕으로 부하 프로필 및 리스크 히트맵을 생성하는 Python 스크립트를 제공합니다.
 
 ---
 
-## 2. 데이터 확보 프로세스 (Workflow)
+## 2. 데이터 확보 및 분석 프로세스 (Workflow)
 
-윈도우 CMD 환경을 기준으로 설명합니다. (PowerShell 및 Linux용 스크립트도 동일하게 작동합니다.)
+가장 권장되는 **PowerShell(ps1)** 환경을 기준으로 설명합니다. (CMD 및 Bash 스크립트도 구조는 동일합니다.)
 
-### Step 1: 시뮬레이션 데이터 셋 구축
-먼저 모든 시나리오에 대한 SQLite 샌드박스 파일을 생성합니다.
-```cmd
-scripts\cmd\seed_all.bat
+### Step 1: 연구용 데이터 셋 구축
+모든 시나리오에 대한 SQLite 샌드박스 파일을 생성합니다.
+```powershell
+.\scripts\ps1\01-setup-research-data.ps1
 ```
-*   **결과**: `experiments\data\` 폴더에 `steady_normal.db`, `spike_flash_sale.db` 등의 파일이 가득 차게 됩니다.
+*   **결과**: `experiments\data\` 폴더에 시나리오별 `.db` 파일이 생성됩니다.
 
 ### Step 2: 전수 조사 및 CSV 추출
-구축된 데이터 셋과 테스트 DDL 케이스들을 모두 결합하여 대규모 분석을 실행합니다.
-```cmd
-scripts\cmd\run_research.bat
+구축된 데이터 셋과 `experiments/ddl` 폴더의 모든 케이스를 결합하여 분석을 실행합니다.
+```powershell
+.\scripts\ps1\02-run-research-batch.ps1
 ```
-*   **동작**: 모든 DB 파일과 SQL 파일을 순회하며 분석을 수행하고, 결과를 `experiments\reports\research_results.csv`에 누적합니다.
+*   **결과**: `experiments\reports\research_results.csv` 파일에 모든 교차 분석 결과가 누적됩니다.
+
+### Step 3: 데이터 시각화 (Visualization)
+제공되는 Python 스크립트를 사용하여 그래프를 생성합니다. (Pandas, Seaborn, Matplotlib 필요)
+
+**A. 리스크 분석 결과 히트맵 생성**
+```bash
+python tools/visualization/plot_results.py experiments/reports/research_results.csv
+```
+*   **생성물**: `research_results_analysis.png` (시나리오별 리스크 히트맵, 리스크 등급 분포 등)
+
+**B. 특정 시뮬레이션 부하 프로필 생성**
+```bash
+# 먼저 특정 시나리오의 지표를 CSV로 추출
+go run ./cmd/migraguard simulate --scenario experiments/scenarios/03_spike.yaml --csv spike_metrics.csv --no-db
+# 그래프 생성
+python tools/visualization/plot_load.py spike_metrics.csv
+```
+*   **생성물**: `spike_metrics_load.png` (시간 흐름에 따른 TPS 및 커넥션 변화 그래프)
 
 ---
 
 ## 3. CSV 데이터 구조 상세 (Output Schema)
+
+... (기존 내용 유지) ...
 
 추출된 `research_results.csv` 파일의 각 컬럼이 의미하는 바는 다음과 같습니다.
 

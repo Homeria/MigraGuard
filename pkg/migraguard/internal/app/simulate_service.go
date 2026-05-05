@@ -63,6 +63,6 @@ func (s *SimulateService) Run(ctx context.Context, scenarioPath string, force bo
 		return "", fmt.Errorf("failed to seed scenario data: %w", err)
 	}
 
-	fmt.Printf("[OK] Simulation Sandbox seeded: %s (%s)\n", dbPath, scenario.Description)
+	fmt.Fprintf(os.Stderr, "[OK] Simulation Sandbox seeded: %s (%s)\n", dbPath, scenario.Description)
 	return dbPath, nil
 }

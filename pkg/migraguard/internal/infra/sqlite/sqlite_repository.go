@@ -31,8 +31,8 @@ func (a *SQLiteAdapter) RecordDeltaSnapshots(snapshots []types.WorkloadSnapshot)
 
 // RecordTableDynamicMetrics persists table-specific metrics.
 func (a *SQLiteAdapter) RecordTableDynamicMetrics(m *types.TableDynamicMetrics) error {
-	query := `INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)`
-	_, err := a.db.Exec(query, m.TableName, m.TableSize, m.ReplicationLag, m.ActiveConnections, m.P99Time, m.TPS)
+	query := `INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err := a.db.Exec(query, m.TableName, m.TableSize, m.ReplicationLag, m.ActiveConnections, m.P99Time, m.TPS, m.SharedBlksHit, m.SharedBlksRead)
 	return err
 }
 
@@ -76,4 +76,24 @@ func (a *SQLiteAdapter) SynchronizeOriginalSnapshots(snapshots []types.WorkloadS
 		}
 	}
 	return tx.Commit()
+}
+
+// FetchAllTableMetrics retrieves all table metrics from the database.
+func (a *SQLiteAdapter) FetchAllTableMetrics() ([]types.TableDynamicMetrics, error) {
+	query := `SELECT timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read FROM table_metrics ORDER BY timestamp ASC`
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []types.TableDynamicMetrics
+	for rows.Next() {
+		var m types.TableDynamicMetrics
+		if err := rows.Scan(&m.Timestamp, &m.TableName, &m.TableSize, &m.ReplicationLag, &m.ActiveConnections, &m.P99Time, &m.TPS, &m.SharedBlksHit, &m.SharedBlksRead); err != nil {
+			continue
+		}
+		results = append(results, m)
+	}
+	return results, nil
 }

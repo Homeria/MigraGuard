@@ -38,6 +38,9 @@ type SQLiteClient interface {
 	// SynchronizeOriginalSnapshots updates raw statistics.
 	SynchronizeOriginalSnapshots(snapshots []WorkloadSnapshot) error
 
+	// FetchAllTableMetrics retrieves all table metrics for export.
+	FetchAllTableMetrics() ([]TableDynamicMetrics, error)
+
 	// MaintenancePurgeData deletes expired data.
 	MaintenancePurgeData(retentionDays int) error
 	Close() error

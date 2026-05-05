@@ -39,6 +39,15 @@ vendor/
 !.env.example
 migraguard.yaml
 
+# Generated Research & Simulation Data
+experiments/data/*.db
+experiments/reports/*.csv
+experiments/reports/metrics/*.csv
+experiments/reports/*_plots/
+*.csv
+*.png
+*.txt
+
 # Project specific docs (already ignored)
 spec/total_spec.pdf
 
