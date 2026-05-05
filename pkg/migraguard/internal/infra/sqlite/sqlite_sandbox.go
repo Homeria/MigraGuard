@@ -31,8 +31,8 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 	}
 	defer tx.Rollback()
 
-	metricStmt, _ := tx.Prepare(`INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-	workloadStmt, _ := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time) VALUES (?, ?, ?, ?, ?)`)
+	metricStmt, _ := tx.Prepare(`INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	workloadStmt, _ := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?)`)
 
 	// Define tables to seed: TargetTable + auxiliary fintech tables for realistic background noise
 	tables := []string{"account_balances", "inventory_stocks", "orders", "order_event_logs"}
@@ -61,6 +61,11 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 		conns := int(float64(scenario.PGState.ActiveConnections) * (tps / scenario.History.PeakTPS))
 		currentSize := scenario.PGState.TableSizeMB*1024*1024 + int64(i*1024)
 
+		// 3. I/O Simulation (Cache Hit Ratio)
+		// Base hit ratio 98%, drops slightly as TPS increases towards Peak
+		hitRatio := 0.98 - 0.05*(tps/scenario.History.PeakTPS)
+		if hitRatio < 0.85 { hitRatio = 0.85 }
+
 		// For the last point (Now), we force it to match the requested PGState exactly
 		if isLastPoint {
 			t = now // Use actual current time for the final snapshot
@@ -81,7 +86,13 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 				tableTPS *= 0.5 // Secondary tables have less load
 			}
 
-			if _, err := metricStmt.Exec(t, tableName, currentSize, scenario.PGState.ReplicationLagS, conns, p99, tableTPS); err != nil {
+			// Generate Blocks (Hit/Read)
+			// Assume each transaction touches ~20 blocks on average
+			totalBlocks := int64(tableTPS * 60 * 20)
+			hitBlocks := int64(float64(totalBlocks) * hitRatio)
+			readBlocks := totalBlocks - hitBlocks
+
+			if _, err := metricStmt.Exec(t, tableName, currentSize, scenario.PGState.ReplicationLagS, conns, p99, tableTPS, hitBlocks, readBlocks); err != nil {
 				return err
 			}
 
@@ -101,7 +112,10 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 				calls := int64(tableTPS * 60 * share) // calls per interval
 				totalTime := float64(calls) * p99      // total time in ms
 				
-				if _, err := workloadStmt.Exec(t, queryID, qText, calls, totalTime); err != nil {
+				qHit := int64(float64(calls*20) * hitRatio)
+				qRead := int64(calls*20) - qHit
+				
+				if _, err := workloadStmt.Exec(t, queryID, qText, calls, totalTime, qHit, qRead); err != nil {
 					return err
 				}
 			}

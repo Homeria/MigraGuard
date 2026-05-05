@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard"
 	"github.com/spf13/cobra"
@@ -11,6 +13,8 @@ import (
 var (
 	scenarioPath string
 	forceSeed    bool
+	exportCSV    string
+	noDB         bool
 )
 
 var simulateCmd = &cobra.Command{
@@ -31,8 +35,48 @@ and seeds it with mathematical time-series data for research validation.`,
 			return err
 		}
 
-		_, err = mg.Simulate(context.Background(), scenarioPath, forceSeed)
-		return err
+		dbPath, err := mg.Simulate(context.Background(), scenarioPath, forceSeed)
+		if err != nil {
+			return err
+		}
+
+		if exportCSV != "" {
+			// Connect to the newly created sandbox to export
+			if err := mg.UseSandbox(dbPath); err != nil {
+				return err
+			}
+
+			var writer io.Writer
+			if exportCSV == "-" {
+				writer = os.Stdout
+			} else {
+				f, err := os.Create(exportCSV)
+				if err != nil {
+					return fmt.Errorf("failed to create CSV file: %w", err)
+				}
+				defer f.Close()
+				writer = f
+			}
+
+			if err := mg.ExportSandboxMetricsToWriter(writer); err != nil {
+				return fmt.Errorf("failed to export metrics: %w", err)
+			}
+
+			if exportCSV != "-" {
+				fmt.Fprintf(os.Stderr, "[OK] Metrics exported to %s\n", exportCSV)
+			}
+		}
+
+		if noDB && exportCSV != "" {
+			mg.Close() // Close handle to allow deletion
+			if err := os.Remove(dbPath); err != nil {
+				fmt.Fprintf(os.Stderr, "[WARNING] Failed to remove sandbox DB: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "[INFO] Temporary sandbox database removed (%s)\n", dbPath)
+			}
+		}
+
+		return nil
 	},
 }
 
@@ -40,4 +84,6 @@ func init() {
 	rootCmd.AddCommand(simulateCmd)
 	simulateCmd.Flags().StringVarP(&scenarioPath, "scenario", "s", "", "Path to the simulation scenario YAML")
 	simulateCmd.Flags().BoolVarP(&forceSeed, "force", "f", false, "Force overwrite existing sandbox database")
+	simulateCmd.Flags().StringVar(&exportCSV, "csv", "", "Export generated metrics to CSV file (use '-' for Stdout)")
+	simulateCmd.Flags().BoolVar(&noDB, "no-db", false, "Remove the SQLite DB file after CSV export (only works with --csv)")
 }

@@ -2,7 +2,10 @@ package migraguard
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/analyzer"
@@ -149,4 +152,52 @@ func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisRe
 func (c *Client) Simulate(ctx context.Context, scenarioPath string, force bool) (string, error) {
 	simulateService := app.NewSimulateService(c.config.Verbose)
 	return simulateService.Run(ctx, scenarioPath, force)
+}
+
+// ExportSandboxMetrics exports all metrics from the current sandbox/sqlite to a CSV file.
+func (c *Client) ExportSandboxMetrics(outputPath string) error {
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer f.Close()
+
+	return c.ExportSandboxMetricsToWriter(f)
+}
+
+// ExportSandboxMetricsToWriter exports all metrics from the current sandbox/sqlite to an io.Writer.
+func (c *Client) ExportSandboxMetricsToWriter(w io.Writer) error {
+	if c.sqlite == nil {
+		return fmt.Errorf("no sqlite/sandbox database connected")
+	}
+
+	metrics, err := c.sqlite.FetchAllTableMetrics()
+	if err != nil {
+		return fmt.Errorf("failed to fetch metrics: %w", err)
+	}
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	// Header
+	writer.Write([]string{"Timestamp", "TableName", "TableSize", "ReplicationLag", "ActiveConnections", "P99Time", "TPS", "SharedBlksHit", "SharedBlksRead"})
+
+	for _, m := range metrics {
+		row := []string{
+			m.Timestamp.Format("2006-01-02 15:04:05"),
+			m.TableName,
+			fmt.Sprintf("%d", m.TableSize),
+			fmt.Sprintf("%.2f", m.ReplicationLag),
+			fmt.Sprintf("%d", m.ActiveConnections),
+			fmt.Sprintf("%.2f", m.P99Time),
+			fmt.Sprintf("%.2f", m.TPS),
+			fmt.Sprintf("%d", m.SharedBlksHit),
+			fmt.Sprintf("%d", m.SharedBlksRead),
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return writer.Error()
 }
