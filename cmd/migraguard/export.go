@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -26,7 +27,7 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		mg, err := migraguard.New(migraguard.Config{
+		mg, err := migraguard.NewSandboxClient(exportInputPath, migraguard.Config{
 			Verbose: Verbose,
 		})
 		if err != nil {
@@ -35,12 +36,7 @@ var exportCmd = &cobra.Command{
 		}
 		defer mg.Close()
 
-		if err := mg.UseSandbox(exportInputPath); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to load sandbox: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := mg.ExportSandboxMetrics(exportOutputPath); err != nil {
+		if err := mg.ExportSandboxMetrics(context.Background(), exportOutputPath); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Export failed: %v\n", err)
 			os.Exit(1)
 		}

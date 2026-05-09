@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -91,10 +92,10 @@ func (a *SQLiteAdapter) Close() error {
 }
 
 // MaintenancePurgeData deletes data older than the retention period.
-func (a *SQLiteAdapter) MaintenancePurgeData(retentionDays int) error {
-	_, _ = a.db.Exec(`DELETE FROM workload_snapshots WHERE timestamp < datetime('now', '-' || ? || ' days')`, retentionDays)
-	_, _ = a.db.Exec(`DELETE FROM table_metrics WHERE timestamp < datetime('now', '-' || ? || ' days')`, retentionDays)
+func (a *SQLiteAdapter) MaintenancePurgeData(ctx context.Context, retentionDays int) error {
+	_, _ = a.db.ExecContext(ctx, `DELETE FROM workload_snapshots WHERE timestamp < datetime('now', '-' || ? || ' days')`, retentionDays)
+	_, _ = a.db.ExecContext(ctx, `DELETE FROM table_metrics WHERE timestamp < datetime('now', '-' || ? || ' days')`, retentionDays)
 
-	_, err := a.db.Exec("VACUUM")
+	_, err := a.db.ExecContext(ctx, "VACUUM")
 	return err
 }

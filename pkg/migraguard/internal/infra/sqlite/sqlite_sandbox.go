@@ -9,12 +9,60 @@ import (
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
+// WorkloadProfiler is the interface for generating realistic traffic patterns.
+type WorkloadProfiler interface {
+	CalculateTPS(t time.Time, profile types.SQLiteHistoryProfile) float64
+}
+
+// DefaultWorkloadProfiler implements a rich daily/weekly pattern with sine waves and noise.
+type DefaultWorkloadProfiler struct{}
+
+func (p *DefaultWorkloadProfiler) CalculateTPS(t time.Time, profile types.SQLiteHistoryProfile) float64 {
+	// A. Time-based normalization (0.0 - 1.0)
+	hour := float64(t.Hour()) + float64(t.Minute())/60.0
+	
+	// 1. Daily Sine Wave (Peak at 14:00 and 20:00)
+	dailyPattern := 0.4*math.Sin((hour-9)*math.Pi/12.0) + 0.3*math.Sin((hour-18)*math.Pi/6.0) + 0.5
+	
+	// 2. Weekly Pattern (Weekend traffic is 40% lower)
+	weeklyMult := 1.0
+	if profile.WeeklyPattern && (t.Weekday() == time.Saturday || t.Weekday() == time.Sunday) {
+		weeklyMult = 0.6
+	}
+
+	// 3. Special Events (Flash Sales, Maintenance)
+	eventMult := 1.0
+	for _, event := range profile.Events {
+		eventStart := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).
+			AddDate(0, 0, -profile.Days+event.StartDay).
+			Add(time.Duration(event.StartHour) * time.Hour)
+		eventEnd := eventStart.Add(time.Duration(event.DurationH) * time.Hour)
+
+		if t.After(eventStart) && t.Before(eventEnd) {
+			eventMult = event.Multiplier
+			break
+		}
+	}
+
+	// 4. Combined Calculation
+	finalTPS := (profile.BaseTPS + dailyPattern*(profile.PeakTPS-profile.BaseTPS)) * weeklyMult * eventMult
+	
+	// 5. Gaussian-like Noise (10% variance)
+	noise := (rand.Float64()*2 - 1) * profile.NoiseVariance * finalTPS
+	
+	return math.Max(1.0, finalTPS + noise)
+}
+
 type SandboxEngine struct {
-	adapter *SQLiteAdapter
+	adapter  *SQLiteAdapter
+	profiler WorkloadProfiler
 }
 
 func NewSandboxEngine(adapter *SQLiteAdapter) *SandboxEngine {
-	return &SandboxEngine{adapter: adapter}
+	return &SandboxEngine{
+		adapter:  adapter,
+		profiler: &DefaultWorkloadProfiler{},
+	}
 }
 
 func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
@@ -53,8 +101,8 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 		t := startTime.Add(time.Duration(i) * interval)
 		isLastPoint := (i == totalPoints)
 
-		// 1. Calculate Base Traffic (Daily + Weekly Cycle)
-		tps := e.calculateRichTPS(t, scenario.History)
+		// 1. Calculate Base Traffic using the profiler strategy
+		tps := e.profiler.CalculateTPS(t, scenario.History)
 
 		// 2. Correlation-based Metrics
 		p99 := scenario.PGState.P99TimeMS * math.Exp(tps/scenario.History.PeakTPS-1.0)
@@ -123,40 +171,4 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 	}
 
 	return tx.Commit()
-}
-
-func (e *SandboxEngine) calculateRichTPS(t time.Time, profile types.SQLiteHistoryProfile) float64 {
-	// A. Time-based normalization (0.0 - 1.0)
-	hour := float64(t.Hour()) + float64(t.Minute())/60.0
-	
-	// 1. Daily Sine Wave (Peak at 14:00 and 20:00)
-	dailyPattern := 0.4*math.Sin((hour-9)*math.Pi/12.0) + 0.3*math.Sin((hour-18)*math.Pi/6.0) + 0.5
-	
-	// 2. Weekly Pattern (Weekend traffic is 40% lower)
-	weeklyMult := 1.0
-	if profile.WeeklyPattern && (t.Weekday() == time.Saturday || t.Weekday() == time.Sunday) {
-		weeklyMult = 0.6
-	}
-
-	// 3. Special Events (Flash Sales, Maintenance)
-	eventMult := 1.0
-	for _, event := range profile.Events {
-		eventStart := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).
-			AddDate(0, 0, -profile.Days+event.StartDay).
-			Add(time.Duration(event.StartHour) * time.Hour)
-		eventEnd := eventStart.Add(time.Duration(event.DurationH) * time.Hour)
-
-		if t.After(eventStart) && t.Before(eventEnd) {
-			eventMult = event.Multiplier
-			break
-		}
-	}
-
-	// 4. Combined Calculation
-	finalTPS := (profile.BaseTPS + dailyPattern*(profile.PeakTPS-profile.BaseTPS)) * weeklyMult * eventMult
-	
-	// 5. Gaussian-like Noise (10% variance)
-	noise := (rand.Float64()*2 - 1) * profile.NoiseVariance * finalTPS
-	
-	return math.Max(1.0, finalTPS + noise)
 }

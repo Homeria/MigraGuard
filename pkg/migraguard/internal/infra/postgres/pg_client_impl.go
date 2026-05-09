@@ -110,7 +110,7 @@ func (a *PostgresAdapter) CheckTableSchemaPresence(ctx context.Context, name str
 			continue
 		}
 
-		return errors.Wrap(errors.ErrTableNotFound, "CheckTableSchemaPresence", n)
+		return errors.WrapWithTable(errors.ErrTableNotFound, "PostgresAdapter.CheckTableSchemaPresence", n, "validation failed")
 	}
 	return nil
 }

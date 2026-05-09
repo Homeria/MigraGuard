@@ -12,6 +12,7 @@ import (
 	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/app"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/infra/postgres"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/infra/sqlite"
+	migraErrors "github.com/Homeria/MigraGuard/pkg/migraguard/internal/shared/errors"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
@@ -33,26 +34,24 @@ type Client struct {
 	config *Config
 	pg     types.PostgresClient
 	sqlite types.SQLiteClient
+	logger types.Logger
 }
 
-// New creates a new MigraGuard client with optional overrides.
-func New(cfg Config, opts ...Option) (*Client, error) {
-	// 1. Fill missing risk parameters with system defaults (Surgical approach)
+// NewLiveClient creates a MigraGuard client for live database monitoring and analysis.
+func NewLiveClient(cfg Config, opts ...Option) (*Client, error) {
 	defaults := analyzer.DefaultRiskConstants()
 	fillMissingRiskParams(&cfg.Risk, &defaults)
 
-	// 2. Apply functional options (highest priority)
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
-	// 3. Initialize Adapters
-	var pgAdapter *postgres.PostgresAdapter
+	var pgAdapter types.PostgresClient
 	var err error
 	if cfg.PostgresDSN != "" {
 		pgAdapter, err = postgres.NewAdapter(cfg.PostgresDSN)
 		if err != nil {
-			return nil, fmt.Errorf("failed to connect to postgres: %w", err)
+			return nil, migraErrors.Wrap(err, "Client.NewLiveClient", "postgres connection failed")
 		}
 	}
 
@@ -61,17 +60,74 @@ func New(cfg Config, opts ...Option) (*Client, error) {
 		if pgAdapter != nil {
 			pgAdapter.Close()
 		}
-		return nil, fmt.Errorf("failed to connect to sqlite: %w", err)
+		return nil, migraErrors.Wrap(err, "Client.NewLiveClient", "sqlite initialization failed")
 	}
 
 	return &Client{
 		config: &cfg,
 		pg:     pgAdapter,
 		sqlite: sqliteRepo,
+		logger: &defaultLogger{}, // Default no-op logger
 	}, nil
 }
 
-// fillMissingRiskParams ensures that user settings are preserved while filling in gaps.
+// NewSandboxClient creates a MigraGuard client for offline simulation and research.
+func NewSandboxClient(sandboxPath string, cfg Config, opts ...Option) (*Client, error) {
+	defaults := analyzer.DefaultRiskConstants()
+	fillMissingRiskParams(&cfg.Risk, &defaults)
+
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
+	sandboxRepo, err := sqlite.NewRepository(sandboxPath)
+	if err != nil {
+		return nil, migraErrors.Wrap(err, "Client.NewSandboxClient", "sandbox loading failed")
+	}
+
+	return &Client{
+		config: &cfg,
+		pg:     sqlite.NewVirtualPGAdapter(sandboxRepo),
+		sqlite: sandboxRepo,
+		logger: &defaultLogger{},
+	}, nil
+}
+
+// WithLogger sets a custom logger for the client.
+func (c *Client) WithLogger(l types.Logger) *Client {
+	c.logger = l
+	return c
+}
+
+// defaultLogger is a no-op implementation of types.Logger.
+type defaultLogger struct{}
+
+func (l *defaultLogger) Debug(msg string, args ...interface{}) {}
+func (l *defaultLogger) Info(msg string, args ...interface{})  {}
+func (l *defaultLogger) Warn(msg string, args ...interface{})  {}
+func (l *defaultLogger) Error(msg string, args ...interface{}) {}
+
+// --- Functional Options ---
+
+func WithVerbose(v bool) Option {
+	return func(c *Config) { c.Verbose = v }
+}
+
+func WithDangerThreshold(t float64) Option {
+	return func(c *Config) { c.Risk.ThresholdDanger = t }
+}
+
+func WithWarningThreshold(t float64) Option {
+	return func(c *Config) { c.Risk.ThresholdWarning = t }
+}
+
+// --- Legacy Support ---
+
+// New is kept for backward compatibility but calls NewLiveClient internally.
+func New(cfg Config, opts ...Option) (*Client, error) {
+	return NewLiveClient(cfg, opts...)
+}
+
 func fillMissingRiskParams(target *types.RiskConstants, def *types.RiskConstants) {
 	if target.DiskIO == 0 { target.DiskIO = def.DiskIO }
 	if target.TMeta == 0 { target.TMeta = def.TMeta }
@@ -90,49 +146,23 @@ func fillMissingRiskParams(target *types.RiskConstants, def *types.RiskConstants
 	if target.BaseShare == 0 { target.BaseShare = def.BaseShare }
 }
 
-// --- Functional Options ---
-
-func WithVerbose(v bool) Option {
-	return func(c *Config) { c.Verbose = v }
-}
-
-func WithDangerThreshold(t float64) Option {
-	return func(c *Config) { c.Risk.ThresholdDanger = t }
-}
-
-func WithWarningThreshold(t float64) Option {
-	return func(c *Config) { c.Risk.ThresholdWarning = t }
-}
-
-// UseSandbox switches the client to use a VirtualPGAdapter backed by the provided SQLite path.
-func (c *Client) UseSandbox(sandboxPath string) error {
-	sandboxRepo, err := sqlite.NewRepository(sandboxPath)
-	if err != nil {
-		return fmt.Errorf("failed to load sandbox: %w", err)
-	}
-	
-	// Replace PG adapter with Virtual adapter
-	c.pg = sqlite.NewVirtualPGAdapter(sandboxRepo)
-	
-	// Close current sqlite and replace with sandbox sqlite
-	if c.sqlite != nil {
-		c.sqlite.Close()
-	}
-	c.sqlite = sandboxRepo
-	return nil
-}
+// --- Methods ---
 
 // Close releases all resources.
 func (c *Client) Close() error {
-	if c.pg != nil { c.pg.Close() }
-	if c.sqlite != nil { c.sqlite.Close() }
+	if c.pg != nil {
+		c.pg.Close()
+	}
+	if c.sqlite != nil {
+		c.sqlite.Close()
+	}
 	return nil
 }
 
 // StartAgent starts background collection.
 func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 	if c.pg == nil {
-		return fmt.Errorf("agent service requires a valid PostgreSQL connection")
+		return migraErrors.New(migraErrors.ErrCodeDBConn, "Client.StartAgent", "agent requires PostgreSQL connection")
 	}
 	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays)
 	agent.SetTargetTables(targetTables)
@@ -142,7 +172,7 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 // Analyze performs the analysis.
 func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisResponse, error) {
 	if c.pg == nil {
-		return nil, fmt.Errorf("analysis requires a valid PostgreSQL connection or --sandbox mode")
+		return nil, migraErrors.New(migraErrors.ErrCodeDBConn, "Client.Analyze", "analysis requires connection")
 	}
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
 	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})
@@ -155,25 +185,25 @@ func (c *Client) Simulate(ctx context.Context, scenarioPath string, force bool) 
 }
 
 // ExportSandboxMetrics exports all metrics from the current sandbox/sqlite to a CSV file.
-func (c *Client) ExportSandboxMetrics(outputPath string) error {
+func (c *Client) ExportSandboxMetrics(ctx context.Context, outputPath string) error {
 	f, err := os.Create(outputPath)
 	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
+		return migraErrors.Wrap(err, "Client.ExportSandboxMetrics", "failed to create file")
 	}
 	defer f.Close()
 
-	return c.ExportSandboxMetricsToWriter(f)
+	return c.ExportSandboxMetricsToWriter(ctx, f)
 }
 
 // ExportSandboxMetricsToWriter exports all metrics from the current sandbox/sqlite to an io.Writer.
-func (c *Client) ExportSandboxMetricsToWriter(w io.Writer) error {
+func (c *Client) ExportSandboxMetricsToWriter(ctx context.Context, w io.Writer) error {
 	if c.sqlite == nil {
-		return fmt.Errorf("no sqlite/sandbox database connected")
+		return migraErrors.New(migraErrors.ErrCodeDBConn, "Client.ExportSandboxMetricsToWriter", "no sqlite connected")
 	}
 
-	metrics, err := c.sqlite.FetchAllTableMetrics()
+	metrics, err := c.sqlite.FetchAllTableMetrics(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch metrics: %w", err)
+		return migraErrors.Wrap(err, "Client.ExportSandboxMetricsToWriter", "fetch failed")
 	}
 
 	writer := csv.NewWriter(w)

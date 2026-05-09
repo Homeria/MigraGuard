@@ -45,7 +45,7 @@ func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]
 
 // FetchTableDynamicMetrics retrieves the latest simulated table state from SQLite.
 func (a *VirtualPGAdapter) FetchTableDynamicMetrics(ctx context.Context, tableName string) (*types.TableDynamicMetrics, error) {
-	m, err := a.sqlite.GetLatestTableMetrics(tableName)
+	m, err := a.sqlite.GetLatestTableMetrics(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
