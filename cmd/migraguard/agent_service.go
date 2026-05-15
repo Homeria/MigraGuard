@@ -62,7 +62,7 @@ var agentCmd = &cobra.Command{
 		}
 
 		// 5. Initialize client
-		mg, err := migraguard.New(migraguard.Config{
+		mg, err := migraguard.NewLiveClient(migraguard.Config{
 			PostgresDSN:   finalDB,
 			SQLitePath:    finalSQLite,
 			Interval:      finalInterval,

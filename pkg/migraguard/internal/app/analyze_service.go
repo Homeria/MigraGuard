@@ -37,12 +37,12 @@ type AnalysisTask struct {
 func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*types.AnalysisResponse, error) {
 	sqlContent, err := os.ReadFile(task.SQLPath)
 	if err != nil {
-		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "failed to read file")
+		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "failed to read SQL file")
 	}
 
 	results, err := analyzer.ParseSQL(string(sqlContent))
 	if err != nil {
-		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "parsing error")
+		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "SQL parsing error")
 	}
 	if len(results) == 0 {
 		return nil, migraErrors.ErrInvalidSQL

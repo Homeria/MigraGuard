@@ -1,27 +1,28 @@
 package sqlite
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
 // RecordDeltaSnapshots stores calculated delta metrics in SQLite.
-func (a *SQLiteAdapter) RecordDeltaSnapshots(snapshots []types.WorkloadSnapshot) error {
-	tx, err := a.db.Begin()
+func (a *SQLiteAdapter) RecordDeltaSnapshots(ctx context.Context, snapshots []types.WorkloadSnapshot) error {
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("transaction start failed: %w", err)
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for _, s := range snapshots {
-		if _, err := stmt.Exec(s.Timestamp, s.QueryID, s.Query, s.Calls, s.TotalTime, s.Rows, s.SharedBlksHit, s.SharedBlksRead); err != nil {
+		if _, err := stmt.ExecContext(ctx, s.Timestamp, s.QueryID, s.Query, s.Calls, s.TotalTime, s.Rows, s.SharedBlksHit, s.SharedBlksRead); err != nil {
 			return err
 		}
 	}
@@ -30,16 +31,16 @@ func (a *SQLiteAdapter) RecordDeltaSnapshots(snapshots []types.WorkloadSnapshot)
 }
 
 // RecordTableDynamicMetrics persists table-specific metrics.
-func (a *SQLiteAdapter) RecordTableDynamicMetrics(m *types.TableDynamicMetrics) error {
+func (a *SQLiteAdapter) RecordTableDynamicMetrics(ctx context.Context, m *types.TableDynamicMetrics) error {
 	query := `INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read) VALUES (CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := a.db.Exec(query, m.TableName, m.TableSize, m.ReplicationLag, m.ActiveConnections, m.P99Time, m.TPS, m.SharedBlksHit, m.SharedBlksRead)
+	_, err := a.db.ExecContext(ctx, query, m.TableName, m.TableSize, m.ReplicationLag, m.ActiveConnections, m.P99Time, m.TPS, m.SharedBlksHit, m.SharedBlksRead)
 	return err
 }
 
 // FetchLastOriginalSnapshots retrieves the last recorded raw statistics.
-func (a *SQLiteAdapter) FetchLastOriginalSnapshots() (map[int64]types.WorkloadSnapshot, error) {
+func (a *SQLiteAdapter) FetchLastOriginalSnapshots(ctx context.Context) (map[int64]types.WorkloadSnapshot, error) {
 	query := `SELECT query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read FROM original_pg_stat_statements`
-	rows, err := a.db.Query(query)
+	rows, err := a.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -57,21 +58,21 @@ func (a *SQLiteAdapter) FetchLastOriginalSnapshots() (map[int64]types.WorkloadSn
 }
 
 // SynchronizeOriginalSnapshots updates raw statistics in the baseline table.
-func (a *SQLiteAdapter) SynchronizeOriginalSnapshots(snapshots []types.WorkloadSnapshot) error {
-	tx, err := a.db.Begin()
+func (a *SQLiteAdapter) SynchronizeOriginalSnapshots(ctx context.Context, snapshots []types.WorkloadSnapshot) error {
+	tx, err := a.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.Prepare(`INSERT INTO original_pg_stat_statements (query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(query_id) DO UPDATE SET calls = excluded.calls, total_time = excluded.total_time, rows_affected = excluded.rows_affected, shared_blks_hit = excluded.shared_blks_hit, shared_blks_read = excluded.shared_blks_read, updated_at = CURRENT_TIMESTAMP`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO original_pg_stat_statements (query_id, query, calls, total_time, rows_affected, shared_blks_hit, shared_blks_read, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(query_id) DO UPDATE SET calls = excluded.calls, total_time = excluded.total_time, rows_affected = excluded.rows_affected, shared_blks_hit = excluded.shared_blks_hit, shared_blks_read = excluded.shared_blks_read, updated_at = CURRENT_TIMESTAMP`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	for _, s := range snapshots {
-		if _, err := stmt.Exec(s.QueryID, s.Query, s.Calls, s.TotalTime, s.Rows, s.SharedBlksHit, s.SharedBlksRead); err != nil {
+		if _, err := stmt.ExecContext(ctx, s.QueryID, s.Query, s.Calls, s.TotalTime, s.Rows, s.SharedBlksHit, s.SharedBlksRead); err != nil {
 			return err
 		}
 	}
@@ -79,9 +80,9 @@ func (a *SQLiteAdapter) SynchronizeOriginalSnapshots(snapshots []types.WorkloadS
 }
 
 // FetchAllTableMetrics retrieves all table metrics from the database.
-func (a *SQLiteAdapter) FetchAllTableMetrics() ([]types.TableDynamicMetrics, error) {
+func (a *SQLiteAdapter) FetchAllTableMetrics(ctx context.Context) ([]types.TableDynamicMetrics, error) {
 	query := `SELECT timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read FROM table_metrics ORDER BY timestamp ASC`
-	rows, err := a.db.Query(query)
+	rows, err := a.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

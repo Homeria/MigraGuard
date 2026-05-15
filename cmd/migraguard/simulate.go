@@ -30,7 +30,7 @@ and seeds it with mathematical time-series data for research validation.`,
 		// Initialize client (PG connection is NOT required for simulation setup)
 		mg, err := migraguard.New(migraguard.Config{
 			Verbose: Verbose,
-		})
+		}, migraguard.WithDangerThreshold(0)) // Example option, dummy DSN allowed in New()
 		if err != nil {
 			return err
 		}
@@ -42,9 +42,11 @@ and seeds it with mathematical time-series data for research validation.`,
 
 		if exportCSV != "" {
 			// Connect to the newly created sandbox to export
-			if err := mg.UseSandbox(dbPath); err != nil {
+			mg, err := migraguard.NewSandboxClient(dbPath, migraguard.Config{Verbose: Verbose})
+			if err != nil {
 				return err
 			}
+			defer mg.Close()
 
 			var writer io.Writer
 			if exportCSV == "-" {
@@ -58,7 +60,7 @@ and seeds it with mathematical time-series data for research validation.`,
 				writer = f
 			}
 
-			if err := mg.ExportSandboxMetricsToWriter(writer); err != nil {
+			if err := mg.ExportSandboxMetricsToWriter(context.Background(), writer); err != nil {
 				return fmt.Errorf("failed to export metrics: %w", err)
 			}
 

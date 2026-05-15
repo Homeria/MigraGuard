@@ -65,20 +65,20 @@ func (c *Collector) CollectOnce(ctx context.Context) error {
 		return err
 	}
 
-	previous, _ := c.sqlite.FetchLastOriginalSnapshots()
+	previous, _ := c.sqlite.FetchLastOriginalSnapshots(ctx)
 
 	deltas := c.computeDelta(current, previous)
 
 	if len(deltas) > 0 {
-		_ = c.sqlite.RecordDeltaSnapshots(deltas)
+		_ = c.sqlite.RecordDeltaSnapshots(ctx, deltas)
 	}
-	_ = c.sqlite.SynchronizeOriginalSnapshots(current)
+	_ = c.sqlite.SynchronizeOriginalSnapshots(ctx, current)
 
 	updatedTables := []string{}
 	for _, table := range c.targetTables {
 		metrics, err := c.pg.FetchTableDynamicMetrics(ctx, table)
 		if err == nil {
-			_ = c.sqlite.RecordTableDynamicMetrics(metrics)
+			_ = c.sqlite.RecordTableDynamicMetrics(ctx, metrics)
 			updatedTables = append(updatedTables, table)
 		}
 	}
@@ -87,7 +87,7 @@ func (c *Collector) CollectOnce(ctx context.Context) error {
 		timestamp, len(deltas), updatedTables)
 
 	if c.retentionDays > 0 {
-		_ = c.sqlite.MaintenancePurgeData(c.retentionDays)
+		_ = c.sqlite.MaintenancePurgeData(ctx, c.retentionDays)
 	}
 
 	return nil

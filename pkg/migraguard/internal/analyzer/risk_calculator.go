@@ -3,7 +3,6 @@ package analyzer
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -38,23 +37,31 @@ func DefaultRiskConstants() types.RiskConstants {
 
 // RiskEngine calculates DDL risk scores based on workload metrics.
 type RiskEngine struct {
-	pg        types.PostgresClient
-	sqlite    types.SQLiteClient
-	constants types.RiskConstants
-	Verbose   bool
+	pg         types.PostgresClient
+	sqlite     types.SQLiteClient
+	constants  types.RiskConstants
+	evaluators []StepEvaluator
+	Verbose    bool
 }
 
-// NewRiskEngine initializes a new RiskEngine.
+// NewRiskEngine initializes a new RiskEngine with default evaluators.
 func NewRiskEngine(pg types.PostgresClient, sqlite types.SQLiteClient, constants types.RiskConstants) *RiskEngine {
 	return &RiskEngine{
 		pg:        pg,
 		sqlite:    sqlite,
 		constants: constants,
-		Verbose:   false,
+		evaluators: []StepEvaluator{
+			&DDLTimeEvaluator{},
+			&BlockingTimeEvaluator{},
+			&PeakConnectionEvaluator{},
+			&RecoveryTimeEvaluator{},
+			&RiskScoreEvaluator{},
+		},
+		Verbose: false,
 	}
 }
 
-// AnalyzeRisk performs the 5-step risk analysis using configurable weights.
+// AnalyzeRisk performs the 5-step risk analysis using configurable weights and strategies.
 func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisResult) (*types.RiskAnalysisReport, error) {
 	metrics, err := e.pg.FetchTableDynamicMetrics(ctx, analysis.TableName)
 	if err != nil {
@@ -67,14 +74,14 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 	}
 
 	if e.sqlite != nil {
-		report.CurrentTPS, _ = e.sqlite.GetRecentTPSByDelta(analysis.TableName)
-		baseline, _ := e.sqlite.GetTableBaselineStatistics(analysis.TableName)
+		report.CurrentTPS, _ = e.sqlite.GetRecentTPSByDelta(ctx, analysis.TableName)
+		baseline, _ := e.sqlite.GetTableBaselineStatistics(ctx, analysis.TableName)
 		if baseline != nil {
 			report.AvgTPS1h = baseline.AvgTPS_1h
 			report.PeakTPS24h = baseline.PeakTPS_24h
 		}
-		report.SafeWindow, report.SafeWindowTPS, _ = e.sqlite.IdentifySafestDeploymentWindow()
-		report.TopQueries, _ = e.sqlite.GetTopHeavyQueries(3)
+		report.SafeWindow, report.SafeWindowTPS, _ = e.sqlite.IdentifySafestDeploymentWindow(ctx)
+		report.TopQueries, _ = e.sqlite.GetTopHeavyQueries(ctx, 3)
 
 		// Use configurable multipliers for conservative TPS estimation
 		weightedAvg := report.AvgTPS1h * e.constants.AvgMultiplier
@@ -93,61 +100,12 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 		metrics.TPS = maxTPS
 	}
 
-	if analysis.RewriteRequired {
-		report.EstimatedDDLTime = (float64(metrics.TableSize) / float64(e.constants.DiskIO)) * 1000.0
-	} else {
-		report.EstimatedDDLTime = e.constants.TMeta
-	}
-
-	// Use configurable lock impact factors
-	lockImpact := 1.0
-	if analysis.LockLevel <= types.LockLevelShareUpdateExcl {
-		lockImpact = e.constants.ConcurrentImpact
-	} else if analysis.LockLevel < types.LockLevelAccessExclusive {
-		lockImpact = e.constants.MiddleImpact
-	}
-
-	report.BlockingTime = (metrics.P99Time + report.EstimatedDDLTime + (metrics.ReplicationLag * 1000.0)) * lockImpact
-
-	lambdaPerMs := metrics.TPS / 1000.0
-	report.PeakConnections = metrics.ActiveConnections + int(lambdaPerMs*report.BlockingTime)
-
-	if metrics.TPS >= e.constants.MuMax {
-		report.PermanentFailure = true
-		report.RecoveryTime = math.Inf(1)
-	} else {
-		excessiveConns := float64(report.PeakConnections - e.constants.CMax)
-		if excessiveConns > 0 {
-			recoveryRatePerMs := (e.constants.MuMax - metrics.TPS) / 1000.0
-			report.RecoveryTime = excessiveConns / recoveryRatePerMs
-		} else {
-			report.RecoveryTime = 0
+	// Execute evaluation strategies (Phase 2 Architectural Refinement)
+	for _, evaluator := range e.evaluators {
+		if err := evaluator.Evaluate(ctx, analysis, *metrics, report, e.constants); err != nil {
+			return nil, err
 		}
 	}
-
-	report.RiskScore = (float64(report.PeakConnections) / float64(e.constants.CMax)) * 100.0
-
-	// Apply configurable base risk scores
-	baseRisk := 0.0
-	switch analysis.LockLevel {
-	case types.LockLevelAccessExclusive:
-		if analysis.MetadataOnly {
-			baseRisk = e.constants.BaseAccessExclusiveMeta
-		} else {
-			baseRisk = e.constants.BaseAccessExclusiveFull
-		}
-	case types.LockLevelExclusive:
-		baseRisk = e.constants.BaseExclusive
-	case types.LockLevelShare:
-		baseRisk = e.constants.BaseShare
-	}
-
-	if report.RiskScore < baseRisk {
-		report.RiskScore = baseRisk
-	}
-
-	// Evaluate level using configurable thresholds
-	report.RiskLevel = e.EvaluateLevel(report.RiskScore, report.PermanentFailure)
 
 	return report, nil
 }

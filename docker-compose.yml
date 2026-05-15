@@ -49,8 +49,6 @@ services:
     build:
       context: .
       dockerfile: build/docker/Dockerfile
-    profiles:
-      - tools
     volumes:
       - migraguard-data:/app/data
       - ./migraguard.yaml:/app/migraguard.yaml

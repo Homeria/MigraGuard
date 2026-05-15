@@ -59,27 +59,31 @@ var analyzeCmd = &cobra.Command{
 			}
 		}
 
-		// 2. Initialize client
-		mg, err := migraguard.New(migraguard.Config{
+		// 2. Initialize client based on mode
+		var mg *migraguard.Client
+		var err error
+
+		mgCfg := migraguard.Config{
 			PostgresDSN: finalDB,
 			SQLitePath:  finalSQLite,
 			Verbose:     Verbose,
 			Risk:        GlobalConfig.Risk.ToRiskConstants(),
-		})
+		}
+
+		if analyzeSandbox != "" {
+			mg, err = migraguard.NewSandboxClient(analyzeSandbox, mgCfg)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[INFO] Offline Mode: Using sandbox data from %s\n", analyzeSandbox)
+			}
+		} else {
+			mg, err = migraguard.NewLiveClient(mgCfg)
+		}
+
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] MigraGuard initialization failed: %v\n", err)
 			os.Exit(1)
 		}
 		defer mg.Close()
-
-		// 3. Switch to Sandbox Mode if requested
-		if analyzeSandbox != "" {
-			if err := mg.UseSandbox(analyzeSandbox); err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] Failed to load sandbox: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Fprintf(os.Stderr, "[INFO] Offline Mode: Using sandbox data from %s\n", analyzeSandbox)
-		}
 
 		// 4. Run analysis
 		resp, err := mg.Analyze(ctx, filePath)
