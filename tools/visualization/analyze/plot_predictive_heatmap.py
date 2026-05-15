@@ -17,8 +17,13 @@ def plot_predictive_heatmap(csv_path, output_path="predictive_risk_heatmap.png")
     plt.title("🛡️ MigraGuard: 24-Hour Predictive Risk Forecast", fontsize=16, fontweight='bold', pad=20)
     
     # Plot Expected TPS (The workload curve)
-    plt.plot(df['Hour'], df['ExpectedTPS'], color='#2c3e50', linewidth=2.5, label='Predicted TPS (Lambda)', marker='o', markersize=4)
-    plt.fill_between(df['Hour'], df['ExpectedTPS'], color='#bdc3c7', alpha=0.2)
+    plt.plot(df['Hour'], df['ExpectedTPS'], color='#2c3e50', linewidth=2.5, label='Predicted TPS (Average)', marker='o', markersize=4, zorder=5)
+    
+    # Plot Variance Cloud (Min/Max range)
+    if 'MinTPS' in df.columns and 'MaxTPS' in df.columns:
+        plt.fill_between(df['Hour'], df['MinTPS'], df['MaxTPS'], color='#34495e', alpha=0.1, label='Traffic Variance (Min-Max Range)', zorder=4)
+    else:
+        plt.fill_between(df['Hour'], df['ExpectedTPS'], color='#bdc3c7', alpha=0.2, zorder=4)
     
     # Overlay Risk Heatmap (Background coloring)
     for i in range(len(df)):

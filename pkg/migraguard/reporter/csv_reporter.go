@@ -57,44 +57,7 @@ func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.Ris
 	}
 	r.Writer.Flush()
 
-	// Forecast Report (Exported to a separate file for visualization script)
-	if len(forecasts) > 0 {
-		if err := r.writeForecastCSV(forecasts); err != nil {
-			return fmt.Errorf("failed to write forecast CSV: %w", err)
-		}
-	}
-
 	return r.Writer.Error()
-}
-
-func (r *CSVReporter) writeForecastCSV(forecasts []*types.ForecastReport) error {
-	f, err := os.Create("predictive_forecast.csv")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	writer := csv.NewWriter(f)
-	defer writer.Flush()
-
-	// Header
-	writer.Write([]string{"Hour", "ExpectedTPS", "ExpectedP99", "RiskScore", "RiskLevel", "IsSafeWindow", "IsBestHour"})
-
-	for _, report := range forecasts {
-		for _, slot := range report.Timeline {
-			row := []string{
-				strconv.Itoa(slot.Hour),
-				strconv.FormatFloat(slot.ExpectedTPS, 'f', 2, 64),
-				strconv.FormatFloat(slot.ExpectedP99, 'f', 2, 64),
-				strconv.FormatFloat(slot.RiskScore, 'f', 2, 64),
-				slot.RiskLevel,
-				strconv.FormatBool(slot.IsSafeWindow),
-				strconv.FormatBool(slot.Hour == report.BestHour),
-			}
-			writer.Write(row)
-		}
-	}
-	return writer.Error()
 }
 
 // GetHeader returns the standard CSV header for research data.
