@@ -118,7 +118,7 @@ var analyzeCmd = &cobra.Command{
 			rpt = reporter.NewConsoleReporter()
 		}
 
-		if err := rpt.Write(resp.Results, resp.Reports); err != nil {
+		if err := rpt.Write(resp.Results, resp.Reports, resp.ForecastReports); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Report generation failed: %v\n", err)
 			os.Exit(1)
 		}

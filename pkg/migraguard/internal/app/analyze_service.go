@@ -52,6 +52,7 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*types.Ana
 	riskEngine := analyzer.NewRiskEngine(s.pg, s.sqlite, s.constants)
 	riskEngine.Verbose = s.Verbose
 	var finalReports []*types.RiskAnalysisReport
+	var forecastReports []*types.ForecastReport
 	var validResults []types.AnalysisResult
 
 	for _, res := range results {
@@ -60,9 +61,21 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*types.Ana
 			continue
 		}
 
+		// 1. Current Risk Analysis
 		report, err := riskEngine.AnalyzeRisk(ctx, res)
 		if err != nil {
 			return nil, migraErrors.WrapWithTable(err, "AnalyzeService.Run", res.TableName, "analysis failed")
+		}
+
+		// 2. Predictive Forecast Analysis (if requested)
+		if task.Forecast && s.sqlite != nil {
+			forecastData, err := s.sqlite.Get24HourTrafficForecast(ctx, res.TableName)
+			if err == nil && len(forecastData) > 0 {
+				fReport, err := riskEngine.AnalyzeForecast(ctx, res, forecastData)
+				if err == nil {
+					forecastReports = append(forecastReports, fReport)
+				}
+			}
 		}
 
 		validResults = append(validResults, res)
@@ -74,7 +87,8 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*types.Ana
 	}
 
 	return &types.AnalysisResponse{
-		Results: validResults,
-		Reports: finalReports,
+		Results:         validResults,
+		Reports:         finalReports,
+		ForecastReports: forecastReports,
 	}, nil
 }
