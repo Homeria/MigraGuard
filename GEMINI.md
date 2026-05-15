@@ -1,32 +1,32 @@
-# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.8 가상화 및 시뮬레이션 환경 구축 완료)
+# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.8 시각적 안전 구간 발견 기능 완료)
 
-본 문서는 v3.7 코어 분석 엔진 완성 이후, 시스템의 범용성과 확장성을 극대화하기 위한 SDK 모듈화, 계층형 설정 시스템, 그리고 독립형 연구 환경 구축 과정을 기록합니다.
+본 문서는 v3.8 시뮬레이션 환경 구축 이후, 이를 기반으로 향후 24시간의 리스크를 예측하고 시각화하는 지능형 의사결정 지원 시스템 구축 과정을 기록합니다.
 
-## 📅 마지막 업데이트: 2026-05-10 (v3.8-Step 5: Command-Granular Documentation 완성)
-- **현재 상태:** **모든 CLI 명령어 및 독립 바이너리별 전용 매뉴얼 체계 구축 완료**
+## 📅 마지막 업데이트: 2026-05-15 (v3.8-Step 7: Predictive Safe Window Discovery 완성)
+- **현재 상태:** **향후 24시간 트래픽 예측 및 시간대별 리스크 히트맵 시각화 파이프라인 구축 완료**
 - **핵심 성과:** 
-  - **Docker Granular Manuals**: Cluster Setup부터 6개 주요 기능(Agent, Analyze, Simulate, Export, Check, LoadGen)에 대한 개별 가이드 완성.
-  - **Native Granular Manuals**: Setup & Build부터 각 명령어의 OS별 실행 예시(Win/Unix)를 포함한 독립 가이드 정립.
-  - **LoadGen Integration**: `cmd/loadgen` 독립 도구에 대한 명시적 사용 가이드 및 시뮬레이션 시나리오와의 연계 방법 기술.
-  - **Intuitive Navigation**: 모든 문서를 일련번호(00~06) 체계로 정리하여 사용자 가독성 극대화.
+  - **Predictive Engine**: 과거 데이터를 기반으로 24시간 워크로드 프로필을 생성하고, 메모리 상에서 리스크 모델을 24회 반복 시뮬레이션하는 기능 구현.
+  - **Risk Heatmap Visualization**: Python Matplotlib을 이용해 예상 TPS 선 그래프 위에 리스크 수준(Safe/Warning/Danger)을 배경색으로 입힌 히트맵 생성.
+  - **Traffic Variance Cloud**: 단순 평균선이 아닌 실제 데이터의 Min-Max 범위를 투명한 구름 형태로 시각화하여 예측 신뢰도 향상.
+  - **Unified Workflow**: `--forecast` 플래그 하나로 분석부터 그래프 생성(`predictive_risk_heatmap.png`)까지 자동화된 쉘 스크립트 기반 UX 제공.
+  - **CI/CD Integrity**: 일반 분석 모드(Circuit Breaker)와 예측 모드(Decision Support)를 철저히 분리하여 아키텍처 정체성 유지.
 
-## 🚀 향후 로드맵 (Phase 18+ 안정화 및 지능형 고도화)
+## 🚀 향후 로드맵 (Phase 20+ 시뮬레이션 고도화 및 적응형 제안)
 
 > **⚠️ 필독: 다음 세션 시작 전 수행 사항**
 > 
-> **새롭게 개편된 04_guides 디렉토리의 파일들이 실제 명령어(`migraguard`, `loadgen`)의 옵션과 100% 일치하는지 최종 대조 필요.**
-> 특히 Docker 환경에서 `docker compose run`을 이용한 일회성 명령 실행 방식이 누락 없이 기술되었는지 확인할 것.
+> **발표용 데모를 위해 `02_sine_daily_cycle` 시나리오와 `011_danger_rewrite` DDL 조합으로 가장 드라마틱한 히트맵 리포트를 미리 생성해 둘 것.**
+> 또한, 현재 루트에 생성되는 `predictive_forecast.csv`와 이미지 파일을 `experiments/reports/`로 자동 이동하는 스크립트 보완 필요.
 
-1.  **`feat/bug-validation` (v3.8-Step 6 - NEXT PRIORITY)**:
-   - **구현 목표**: 대규모 리팩토링 및 문서화 이후 발견된 런타임 버그 전수 조사.
-   - **검증 항목**: CLI 명령어별 정상 동작 여부, SQLite 데이터 정합성, 에러 코드 출력 정확도 확인.
+1.  **`feat/realistic-workload-simulation` (NEXT PRIORITY)**:
+   - **구현 목표**: 매일 동일한 사인 곡선이 아닌, 요일별 가중치, 피크 시간 무작위 이동, 비대칭 부하 곡선 등을 적용하여 실제 서비스에 근접한 불규칙한 데이터 생성.
+   - **기대 효과**: 히트맵의 변동성 구름(Min-Max)이 훨씬 역동적으로 표현되어 연구적 가치 증대.
 
-
-2. **`feat/adaptive-recommendation` (v3.8-Step 6)**:
-   - **구현 목표**: 수집된 과거 데이터를 분석하여 `mu_max`, `disk_io` 등의 최적값을 시스템이 스스로 제안하는 알고리즘 구현.
+2. **`feat/adaptive-recommendation`**:
+   - **구현 목표**: 수집된 200개 사례 데이터를 분석하여 시스템 환경별 최적 임계값(`mu_max`, `disk_io`)을 머신러닝/통계 기반으로 자동 제안.
 
 
 ---
-**세션 종료:** 이제 MigraGuard는 학술 연구와 실무 분석을 위한 완벽한 인프라를 갖췄습니다. `gen-*-all` 스크립트로 데이터를 쌓고 `visualize_all_*.py`로 그래프를 그리는 것만으로 논문 수준의 통계 자료를 확보할 수 있습니다.
+**세션 종료:** 이제 MigraGuard는 "장애를 막는 방패"를 넘어 "최적의 경로를 안내하는 나침반"의 기능을 갖췄습니다. 캡스톤 디자인의 핵심인 시각적 결과물(Heatmap)은 이제 명령어 한 줄로 즉시 생성 가능합니다.
 
-**사용자의 메모:** 연구 파이프라인 고도화 완료. 시뮬레이션 시 I/O 적중률 분석 가능. 모든 플랫폼용 계층형 스크립트 및 시각화 자동화 도구가 `scripts/`와 `tools/`에 잘 정리되어 있음.
+**사용자의 메모:** 예측 엔진 안정화 완료. 변동성 시각화(Cloud) 도입으로 전문성 확보. 다음 단계는 시뮬레이터의 '무작위성'을 강화하여 데이터 리얼리티를 높이는 것임.
