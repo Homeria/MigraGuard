@@ -30,7 +30,8 @@ func NewAnalyzeService(pg types.PostgresClient, sqlite types.SQLiteClient, const
 
 // AnalysisTask defines the input for an analysis job.
 type AnalysisTask struct {
-	SQLPath string
+	SQLPath  string
+	Forecast bool
 }
 
 // Run executes the analysis workflow.

@@ -170,12 +170,12 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 }
 
 // Analyze performs the analysis.
-func (c *Client) Analyze(ctx context.Context, sqlPath string) (*types.AnalysisResponse, error) {
+func (c *Client) Analyze(ctx context.Context, sqlPath string, forecast bool) (*types.AnalysisResponse, error) {
 	if c.pg == nil {
 		return nil, migraErrors.New(migraErrors.ErrCodeDBConn, "Client.Analyze", "analysis requires connection")
 	}
 	analyzeService := app.NewAnalyzeService(c.pg, c.sqlite, c.config.Risk, c.config.Verbose)
-	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath})
+	return analyzeService.Run(ctx, app.AnalysisTask{SQLPath: sqlPath, Forecast: forecast})
 }
 
 // Simulate creates a sandbox environment and seeds data based on a scenario.
