@@ -94,3 +94,45 @@ func (a *SQLiteAdapter) GetTopHeavyQueries(ctx context.Context, limit int) ([]ty
 	}
 	return topQueries, nil
 }
+
+// Get24HourTrafficForecast generates a 24-hour baseline profile by averaging historical data by hour.
+func (a *SQLiteAdapter) Get24HourTrafficForecast(ctx context.Context, tableName string) ([]types.ForecastTimeSlot, error) {
+	query := `
+		SELECT 
+			CAST(strftime('%H', timestamp) AS INTEGER) as hour, 
+			AVG(tps) as avg_tps, 
+			AVG(p99_time) as avg_p99 
+		FROM table_metrics 
+		WHERE table_name = ? 
+		GROUP BY hour 
+		ORDER BY hour ASC
+	`
+	rows, err := a.db.QueryContext(ctx, query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	forecast := make([]types.ForecastTimeSlot, 0, 24)
+	for rows.Next() {
+		var f types.ForecastTimeSlot
+		if err := rows.Scan(&f.Hour, &f.ExpectedTPS, &f.ExpectedP99); err != nil {
+			continue
+		}
+		forecast = append(forecast, f)
+	}
+
+	// Ensure we have 24 hours even if some are missing data
+	if len(forecast) > 0 && len(forecast) < 24 {
+		fullForecast := make([]types.ForecastTimeSlot, 24)
+		for i := 0; i < 24; i++ {
+			fullForecast[i].Hour = i
+		}
+		for _, f := range forecast {
+			fullForecast[f.Hour] = f
+		}
+		forecast = fullForecast
+	}
+
+	return forecast, nil
+}

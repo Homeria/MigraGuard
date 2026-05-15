@@ -28,6 +28,8 @@ type SQLiteClient interface {
 	GetLatestTableMetrics(ctx context.Context, tableName string) (*TableDynamicMetrics, error)
 	// GetTopHeavyQueries retrieves the top resource-consuming queries.
 	GetTopHeavyQueries(ctx context.Context, limit int) ([]TopQueryInfo, error)
+	// Get24HourTrafficForecast generates a 24-hour baseline profile.
+	Get24HourTrafficForecast(ctx context.Context, tableName string) ([]ForecastTimeSlot, error)
 
 	// RecordDeltaSnapshots stores calculated delta metrics.
 	RecordDeltaSnapshots(ctx context.Context, snapshots []WorkloadSnapshot) error
