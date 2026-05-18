@@ -65,6 +65,16 @@ migraguard.exe analyze migration.sql --sandbox experiments\data\01_steady_normal
 | `--sandbox` | `-s` | - | **시뮬레이션 데이터베이스 경로**. 이 플래그를 설정하면 **오프라인 모드**가 활성화되어 모든 실시간 DB 연결을 무시합니다. |
 | `--output` | `-o` | `console` | **출력 포맷**. `console`(색상 텍스트), `markdown`(포맷된 보고서), `csv`(로우 데이터) 중에서 선택할 수 있습니다. |
 | `--no-header` | - | `false` | **CSV 헤더 억제**. `-o csv` 사용 시 헤더 행이 출력되지 않도록 합니다. |
+| `--forecast` | `-f` | `false` | **예측 엔진 활성화**. 24시간 베이스라인을 기준으로 리스크를 분석하고 골든 윈도우를 식별합니다. |
+
+---
+
+## 5. 종료 코드 (Exit Codes)
+*   **`0`**: 마이그레이션이 **Safe** 또는 **Warning** 수준으로 간주됩니다.
+*   **`1`**: 마이그레이션이 **Danger** 등급(리스크 점수 > 80)이거나 내부 오류가 발생했습니다.
+� DB 연결을 무시합니다. |
+| `--output` | `-o` | `console` | **출력 포맷**. `console`(색상 텍스트), `markdown`(포맷된 보고서), `csv`(로우 데이터) 중에서 선택할 수 있습니다. |
+| `--no-header` | - | `false` | **CSV 헤더 억제**. `-o csv` 사용 시 헤더 행이 출력되지 않도록 합니다. |
 
 ---
 

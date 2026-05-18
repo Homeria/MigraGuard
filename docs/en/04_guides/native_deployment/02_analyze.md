@@ -65,6 +65,16 @@ migraguard.exe analyze migration.sql --sandbox experiments\data\01_steady_normal
 | `--sandbox` | `-s` | - | **Simulation Database Path**. Setting this flag triggers **Offline Mode**, ignoring any live DB connection. |
 | `--output` | `-o` | `console` | **Output Format**. Choose between `console` (colored text), `markdown` (formatted reports), or `csv` (raw data). |
 | `--no-header` | - | `false` | **Suppress CSV Header**. If using `-o csv`, this flag prevents the header row from being printed. |
+| `--forecast` | `-f` | `false` | **Enable Predictive Engine**. Analyzes risk across a 24-hour baseline and identifies the Golden Window. |
+
+---
+
+## 5. Exit Codes
+*   **`0`**: Migration is considered **Safe** or **Warning**.
+*   **`1`**: Migration is **Danger** (Risk score > 80) or an internal error occurred.
+ng this flag triggers **Offline Mode**, ignoring any live DB connection. |
+| `--output` | `-o` | `console` | **Output Format**. Choose between `console` (colored text), `markdown` (formatted reports), or `csv` (raw data). |
+| `--no-header` | - | `false` | **Suppress CSV Header**. If using `-o csv`, this flag prevents the header row from being printed. |
 
 ---
 
