@@ -83,7 +83,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 	workloadStmt, _ := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?)`)
 
 	// Define tables to seed: TargetTable + auxiliary fintech tables for realistic background noise
-	tables := []string{"account_balances", "inventory_stocks", "orders", "order_event_logs"}
+	tables := []string{"account_balances", "inventory_stocks", "orders", "order_event_logs", "users", "products", "logs"}
 	if scenario.TargetTable != "" {
 		found := false
 		for _, t := range tables {

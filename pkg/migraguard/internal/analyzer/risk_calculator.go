@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -125,6 +126,7 @@ func (e *RiskEngine) AnalyzeForecast(ctx context.Context, analysis types.Analysi
 	}
 
 	minScore := 9999.0
+	minTPS := 999999.0
 
 	for _, slot := range forecast {
 		// Create a virtual snapshot for this hour
@@ -150,8 +152,16 @@ func (e *RiskEngine) AnalyzeForecast(ctx context.Context, analysis types.Analysi
 		slot.RiskLevel = tempReport.RiskLevel
 		slot.IsSafeWindow = tempReport.RiskScore < e.constants.ThresholdWarning
 
-		if slot.RiskScore < minScore {
+		// Best Hour Selection with TPS Tie-breaker
+		// 1. If lower risk score found, update best hour
+		// 2. If risk scores are equal (using epsilon for float stability), choose lower TPS
+		isLowerScore := slot.RiskScore < (minScore - 0.001)
+		isEqualScore := math.Abs(slot.RiskScore-minScore) < 0.001
+		isLowerTPS := slot.ExpectedTPS < minTPS
+
+		if isLowerScore || (isEqualScore && isLowerTPS) {
 			minScore = slot.RiskScore
+			minTPS = slot.ExpectedTPS
 			report.BestHour = slot.Hour
 		}
 
