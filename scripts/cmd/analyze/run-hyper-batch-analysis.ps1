@@ -30,6 +30,15 @@ foreach ($config in $configVariations) {
     $configDir = Join-Path $batchOutputDir $configName
     New-Item -ItemType Directory -Path $configDir -Force | Out-Null
     
+    # Save Metadata for this config
+    $metadata = @{
+        profile_name = $configName
+        mu_max = $config.mu_max
+        disk_io = $config.disk_io
+        timestamp = $timestamp
+    }
+    $metadata | ConvertTo-Json | Out-File (Join-Path $configDir "config_metadata.json")
+    
     # Set Environment Variables for Viper Overrides
     $env:MIGRAGUARD_RISK_MU_MAX = $config.mu_max
     $env:MIGRAGUARD_RISK_DISK_IO = $config.disk_io
