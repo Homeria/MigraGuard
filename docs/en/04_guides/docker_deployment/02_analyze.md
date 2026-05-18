@@ -30,10 +30,17 @@ docker compose run --rm analyze analyze ./code/mig.sql -o markdown > report.md
 docker compose run --rm analyze analyze ./code/mig.sql -o markdown | Out-File -FilePath report.md -Encoding utf8
 ```
 
+## 2. Predictive Analysis (Forecast)
+Generate a 24-hour risk profile to identify the Golden Window.
+```bash
+docker compose run --rm analyze analyze ./code/mig.sql --forecast
+```
+
 ---
 
 ## 3. Flag Reference
 | Flag | Default | Description |
 | :--- | :--- | :--- |
 | `--sandbox` | - | Offline mode. Path must start with `./code/`. |
+| `--forecast` | `false` | **New:** Identifies the safest 24h window for deployment. |
 | `--output` | `console` | `console`, `markdown`, `csv`. |

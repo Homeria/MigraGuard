@@ -95,8 +95,9 @@ Detailed documentation is available in both Korean and English.
 
 | Category | KR (한국어) | EN (English) |
 | :--- | :--- | :--- |
+| **Academic** | [캡스톤 최종 보고서](./docs/kr/07_capstone_report.md) | N/A |
+| **Architecture** | [아키텍처 (Top-Down)](./docs/kr/02_architecture/uml_diagrams/00_system_context.md) | [Architecture (Top-Down)](./docs/en/02_architecture/uml_diagrams/00_system_context.md) |
 | **Requirements** | [KR-01](./docs/kr/01_requirements/functional_spec.md) | [EN-01](./docs/en/01_requirements/functional_spec.md) |
-| **Architecture** | [KR-02](./docs/kr/02_architecture/system_overview.md) | [EN-02](./docs/en/02_architecture/system_overview.md) |
 | **Implementation** | [KR-03](./docs/kr/03_implementation/parser_logic.md) | [EN-03](./docs/en/03_implementation/parser_logic.md) |
 | **User Guide** | [KR-04](./docs/kr/04_guides/sandbox_manual.md) | [EN-04](./docs/en/04_guides/sandbox_manual.md) |
 

@@ -31,7 +31,15 @@ In modern fintech and high-traffic systems, a single `ALTER TABLE` can paralyze 
 
 ## 🏗️ System Architecture
 
-MigraGuard is built with an **SDK-First Architecture**, ensuring that the risk engine can be embedded into any CI/CD pipeline or monitoring dashboard.
+MigraGuard follows an **SDK-First Modular Architecture**. For detailed visual maps and implementation logic, please refer to the refreshed documentation hierarchy:
+
+- **[Level 0: System Context](./02_architecture/uml_diagrams/00_system_context.md)**: High-level overview of actors and components.
+- **[Level 1: CLI Workflows](./02_architecture/uml_diagrams/01_cmd_workflows.md)**: Mid-level operational flows for primary commands.
+- **[Level 1+: Implementation Flows](./02_architecture/uml_diagrams/01_cmd_implementation_flows.md)**: Granular CLI execution paths with file/function nodes.
+- **[Level 2: Core Deep-Dives](./02_architecture/uml_diagrams/02_component_deep_dives.md)**: 5-Step Risk Model and Predictive Engine logic.
+- **[Level 3: Traceability Map](./02_architecture/uml_diagrams/03_implementation_traceability_map.md)**: Visual bridge between domains and source code.
+- **[Level 4: Function Micro-Flows](./02_architecture/uml_diagrams/04_function_level_deep_dives.md)**: Granular internal logic of key functions.
+- **[Level 5: Implementation Blueprint](./02_architecture/uml_diagrams/05_implementation_blueprint.md)**: Annotated source code walk-through.
 
 ### Dual-Process Pipeline
 1.  **MigraGuard Agent**: A lightweight background collector that harvests metrics from `pg_stat_statements` and stores time-series workload patterns in a local SQLite database.

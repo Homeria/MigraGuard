@@ -30,10 +30,17 @@ docker compose run --rm analyze analyze ./code/mig.sql -o markdown > report.md
 docker compose run --rm analyze analyze ./code/mig.sql -o markdown | Out-File -FilePath report.md -Encoding utf8
 ```
 
+## 2. 예측 분석 (Forecast)
+24시간 리스크 프로필을 생성하여 골든 윈도우를 식별합니다.
+```bash
+docker compose run --rm analyze analyze ./code/mig.sql --forecast
+```
+
 ---
 
 ## 3. 주요 플래그
 | 플래그 | 기본값 | 설명 |
 | :--- | :--- | :--- |
 | `--sandbox` | - | 오프라인 모드. 경로는 `./code/`로 시작해야 합니다. |
+| `--forecast` | `false` | **신규:** 배포를 위한 가장 안전한 24시간 창을 식별합니다. |
 | `--output` | `console` | `console`, `markdown`, `csv`. |
