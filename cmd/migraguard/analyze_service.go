@@ -15,6 +15,7 @@ var (
 	analyzeSqlitePath string
 	analyzeSandbox    string
 	analyzeOutput     string
+	analyzeForecast   bool
 	noHeader          bool
 )
 
@@ -25,6 +26,7 @@ func init() {
 	analyzeCmd.Flags().StringVar(&analyzeSqlitePath, "sqlite", "", "Local metric storage (SQLite) path")
 	analyzeCmd.Flags().StringVarP(&analyzeSandbox, "sandbox", "s", "", "Path to SQLite simulation sandbox (Offline Mode)")
 	analyzeCmd.Flags().StringVarP(&analyzeOutput, "output", "o", "console", "Output format (console, markdown, csv)")
+	analyzeCmd.Flags().BoolVar(&analyzeForecast, "forecast", false, "Enable 24-hour predictive risk forecasting")
 	analyzeCmd.Flags().BoolVar(&noHeader, "no-header", false, "Do not print CSV header (only for --output csv)")
 }
 
@@ -86,7 +88,7 @@ var analyzeCmd = &cobra.Command{
 		defer mg.Close()
 
 		// 4. Run analysis
-		resp, err := mg.Analyze(ctx, filePath)
+		resp, err := mg.Analyze(ctx, filePath, analyzeForecast)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Analysis failed: %v\n", err)
 			os.Exit(1)
@@ -116,7 +118,7 @@ var analyzeCmd = &cobra.Command{
 			rpt = reporter.NewConsoleReporter()
 		}
 
-		if err := rpt.Write(resp.Results, resp.Reports); err != nil {
+		if err := rpt.Write(resp.Results, resp.Reports, resp.ForecastReports); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Report generation failed: %v\n", err)
 			os.Exit(1)
 		}

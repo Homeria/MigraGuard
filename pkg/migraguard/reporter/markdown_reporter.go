@@ -16,7 +16,7 @@ func NewMarkdownReporter() *MarkdownReporter {
 }
 
 // Write outputs analysis results in markdown format.
-func (r *MarkdownReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport) error {
+func (r *MarkdownReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport, forecasts []*types.ForecastReport) error {
 	fmt.Println("# [REPORT] MigraGuard Risk Analysis Report")
 
 	for i, res := range results {
@@ -60,6 +60,15 @@ func (r *MarkdownReporter) Write(results []types.AnalysisResult, reports []*type
 					cleanQuery = cleanQuery[:77] + "..."
 				}
 				fmt.Printf("| `%.1f%%` | `%s` | %d |\n", q.Impact, cleanQuery, q.QueryID)
+			}
+		}
+
+		// Display forecast if available
+		for _, f := range forecasts {
+			if f.TableName == res.TableName {
+				fmt.Println("\n### [FORECAST] Predictive 24-Hour Analysis")
+				fmt.Printf("- **Optimal Execution Window**: **%02d:00**\n", f.BestHour)
+				fmt.Println("- **Visualization**: Generated predictive risk heatmap CSV.")
 			}
 		}
 

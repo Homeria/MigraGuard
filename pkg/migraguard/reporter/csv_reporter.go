@@ -25,9 +25,10 @@ func NewCSVReporter() *CSVReporter {
 }
 
 // Write outputs the quantitative risk metrics to the configured writer.
-func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport) error {
+func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport, forecasts []*types.ForecastReport) error {
 	now := time.Now().Format("2006-01-02 15:04:05")
 
+	// Standard Report
 	for i, res := range results {
 		report := reports[i]
 		
@@ -54,8 +55,8 @@ func (r *CSVReporter) Write(results []types.AnalysisResult, reports []*types.Ris
 			return fmt.Errorf("failed to write CSV row: %w", err)
 		}
 	}
-
 	r.Writer.Flush()
+
 	return r.Writer.Error()
 }
 

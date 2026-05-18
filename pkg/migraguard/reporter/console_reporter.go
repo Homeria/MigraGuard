@@ -15,7 +15,7 @@ func NewConsoleReporter() *ConsoleReporter {
 }
 
 // Write prints analysis reports to the console with ANSI colors.
-func (r *ConsoleReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport) error {
+func (r *ConsoleReporter) Write(results []types.AnalysisResult, reports []*types.RiskAnalysisReport, forecasts []*types.ForecastReport) error {
 	for i, res := range results {
 		report := reports[i]
 
@@ -58,6 +58,16 @@ func (r *ConsoleReporter) Write(results []types.AnalysisResult, reports []*types
 			fmt.Printf("  [WARNING] Consider delaying until the golden window: [%s] (Est. %.1f TPS)\n",
 				report.SafeWindow, report.SafeWindowTPS)
 		}
+
+		// Display forecast summary if available
+		for _, f := range forecasts {
+			if f.TableName == res.TableName {
+				fmt.Printf("\n [FORECAST] 24-Hour Prediction Summary\n")
+				fmt.Printf("  - Recommended Golden Window: %02d:00\n", f.BestHour)
+				fmt.Printf("  - Predictive CSV generated for visualization.\n")
+			}
+		}
+
 		fmt.Println(r.drawFooter())
 	}
 	return nil

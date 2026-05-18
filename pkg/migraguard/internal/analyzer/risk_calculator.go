@@ -3,6 +3,7 @@ package analyzer
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -105,6 +106,66 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 		if err := evaluator.Evaluate(ctx, analysis, *metrics, report, e.constants); err != nil {
 			return nil, err
 		}
+	}
+
+	return report, nil
+}
+
+// AnalyzeForecast simulates DDL risk across a 24-hour forecasted traffic profile.
+func (e *RiskEngine) AnalyzeForecast(ctx context.Context, analysis types.AnalysisResult, forecast []types.ForecastTimeSlot) (*types.ForecastReport, error) {
+	// Fetch static metrics (table size) once from PG to avoid repeated I/O
+	metrics, err := e.pg.FetchTableDynamicMetrics(ctx, analysis.TableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch base metrics for forecast: %w", err)
+	}
+
+	report := &types.ForecastReport{
+		TableName: analysis.TableName,
+		Timeline:  make([]types.ForecastTimeSlot, 0, len(forecast)),
+		BestHour:  -1,
+	}
+
+	minScore := 9999.0
+	minTPS := 999999.0
+
+	for _, slot := range forecast {
+		// Create a virtual snapshot for this hour
+		virtualMetrics := *metrics
+		virtualMetrics.TPS = slot.ExpectedTPS
+		virtualMetrics.P99Time = slot.ExpectedP99
+
+		// Run the 5-step risk model in-memory
+		tempReport := &types.RiskAnalysisReport{
+			TableSize:   metrics.TableSize,
+			ActiveConns: metrics.ActiveConnections,
+			BaseTPS:     slot.ExpectedTPS,
+		}
+
+		for _, evaluator := range e.evaluators {
+			if err := evaluator.Evaluate(ctx, analysis, virtualMetrics, tempReport, e.constants); err != nil {
+				return nil, err
+			}
+		}
+
+		// Update slot results
+		slot.RiskScore = tempReport.RiskScore
+		slot.RiskLevel = tempReport.RiskLevel
+		slot.IsSafeWindow = tempReport.RiskScore < e.constants.ThresholdWarning
+
+		// Best Hour Selection with TPS Tie-breaker
+		// 1. If lower risk score found, update best hour
+		// 2. If risk scores are equal (using epsilon for float stability), choose lower TPS
+		isLowerScore := slot.RiskScore < (minScore - 0.001)
+		isEqualScore := math.Abs(slot.RiskScore-minScore) < 0.001
+		isLowerTPS := slot.ExpectedTPS < minTPS
+
+		if isLowerScore || (isEqualScore && isLowerTPS) {
+			minScore = slot.RiskScore
+			minTPS = slot.ExpectedTPS
+			report.BestHour = slot.Hour
+		}
+
+		report.Timeline = append(report.Timeline, slot)
 	}
 
 	return report, nil
