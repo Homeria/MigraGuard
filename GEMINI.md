@@ -1,26 +1,20 @@
-# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.8 시각적 안전 구간 발견 기능 완료)
+# 🛡️ MigraGuard 프로젝트 진행 상황 (v3.8 아키텍처 문서 및 설계 도면 고도화 완료)
 
-본 문서는 v3.8 시뮬레이션 환경 구축 이후, 이를 기반으로 향후 24시간의 리스크를 예측하고 시각화하는 지능형 의사결정 지원 시스템 구축 과정을 기록합니다.
+본 문서는 v3.8 시뮬레이션 환경 및 예측 엔진 구축 이후, 시스템의 신뢰성을 증명하기 위한 다차원 배치 분석과 아키텍처 문서 고도화 과정을 기록합니다.
 
-## 📅 마지막 업데이트: 2026-05-15 (v3.8-Step 7: Predictive Safe Window Discovery 완성)
-- **현재 상태:** **향후 24시간 트래픽 예측 및 시간대별 리스크 히트맵 시각화 파이프라인 구축 완료**
+## 📅 마지막 업데이트: 2026-05-18 (v3.8-Step 8: Architectural Blueprint & Batch Analysis 완료)
+- **현재 상태:** **전체 아키텍처 다이어그램 최신화 및 다차원 리스크 분석 프레임워크 구축 완료**
 - **핵심 성과:** 
-  - **Predictive Engine**: 과거 데이터를 기반으로 24시간 워크로드 프로필을 생성하고, 메모리 상에서 리스크 모델을 24회 반복 시뮬레이션하는 기능 구현.
-  - **Risk Heatmap Visualization**: Python Matplotlib을 이용해 예상 TPS 선 그래프 위에 리스크 수준(Safe/Warning/Danger)을 배경색으로 입힌 히트맵 생성.
-  - **Traffic Variance Cloud**: 단순 평균선이 아닌 실제 데이터의 Min-Max 범위를 투명한 구름 형태로 시각화하여 예측 신뢰도 향상.
-  - **Unified Workflow**: `--forecast` 플래그 하나로 분석부터 그래프 생성(`predictive_risk_heatmap.png`)까지 자동화된 쉘 스크립트 기반 UX 제공.
-  - **CI/CD Integrity**: 일반 분석 모드(Circuit Breaker)와 예측 모드(Decision Support)를 철저히 분리하여 아키텍처 정체성 유지.
+  - **Multi-Dimensional Batch Analysis**: 600회의 시나리오/DDL/설정 조합 테스트를 통해 리스크 엔진의 환경 적응성(High/Low Capacity) 및 Tie-Breaker 로직 검증 완료.
+  - **Top-Down Documentation (Level 0~5)**: 시스템 컨텍스트부터 함수 단위 마이크로 플로우까지 계층화된 아키텍처 문서 체계 구축.
+  - **Rich Implementation Nodes**: 모든 다이어그램 노드에 `File/Func/Args/Role` 정보를 포함하여 설계와 코드 간의 추적성(Traceability) 확보.
+  - **Dual-Language Parity**: 영문(`docs/en`) 및 국문(`docs/kr`) 문서군을 완벽히 동기화하여 글로벌 배포 및 캡스톤 보고서 활용 준비 완료.
+  - **Enhanced Visualization**: 예측 히트맵에 P99 지연 시간 보조축을 추가하여 트래픽-성능 상관관계 시각화 강화.
 
 ## 🚀 향후 로드맵 (Phase 20+ 시뮬레이션 고도화 및 적응형 제안)
 
-> **⚠️ 필독: 다음 세션 시작 전 수행 사항**
-> 
-> **발표용 데모를 위해 `02_sine_daily_cycle` 시나리오와 `011_danger_rewrite` DDL 조합으로 가장 드라마틱한 히트맵 리포트를 미리 생성해 둘 것.**
-> 또한, 현재 루트에 생성되는 `predictive_forecast.csv`와 이미지 파일을 `experiments/reports/`로 자동 이동하는 스크립트 보완 필요.
-
 1.  **`feat/realistic-workload-simulation` (NEXT PRIORITY)**:
-   - **구현 목표**: 매일 동일한 사인 곡선이 아닌, 요일별 가중치, 피크 시간 무작위 이동, 비대칭 부하 곡선 등을 적용하여 실제 서비스에 근접한 불규칙한 데이터 생성.
-   - **기대 효과**: 히트맵의 변동성 구름(Min-Max)이 훨씬 역동적으로 표현되어 연구적 가치 증대.
+   - **구현 목표**: 비대칭 부하 곡선 및 피크 시간 무작위 이동을 적용하여 실제 서비스에 근접한 불규칙한 데이터 생성.
 
 2. **`feat/adaptive-recommendation`**:
    - **구현 목표**: 수집된 200개 사례 데이터를 분석하여 시스템 환경별 최적 임계값(`mu_max`, `disk_io`)을 머신러닝/통계 기반으로 자동 제안.
