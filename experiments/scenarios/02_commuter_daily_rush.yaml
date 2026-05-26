@@ -1,0 +1,19 @@
+experiment_name: "exp_02_commuter_daily_rush"
+description: "Commuter rush hour traffic pattern with distinct asymmetric spikes during morning and evening transit."
+target_table: "orders"
+pg_state:
+  table_size_mb: 2048
+  active_connections: 180
+  p99_time_ms: 22.0
+  current_tps: 650.0
+  replication_lag_s: 0.05
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 50.0
+  peak_tps: 800.0
+  weekly_pattern: true
+  noise_variance: 0.12
+  asymmetric_skew: 0.40
+  peak_shift_hours: 0.5
+  events: []

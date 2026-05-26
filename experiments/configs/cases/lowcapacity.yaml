@@ -1,0 +1,23 @@
+# 🛡️ MigraGuard Case Profile: Low Capacity Configuration
+metadata:
+  case_name: "lowcapacity"
+  db_path: "experiments/data/lowcapacity.db"
+
+risk:
+  disk_io: 10485760   # 10MB/s (Slow HDD / Shared Cloud instances)
+  mu_max: 1200.0      # 1,200 TPS Capacity (High risk of saturation since peak TPS is 3500)
+  c_max: 100          # Only 100 max connections!
+  t_meta: 250.0       # 250 ms Meta locks
+  t_timeout: 3000.0   # 3s timeout
+  thresholds:
+    danger: 75.0      # Stricter danger threshold
+    warning: 40.0     # Stricter warning threshold
+  weights:
+    avg_multiplier: 1.5  # More conservative
+    peak_multiplier: 1.2
+    concurrent_impact: 0.3
+    middle_impact: 0.7
+    base_access_exclusive_meta: 45.0
+    base_access_exclusive_full: 95.0
+    base_exclusive: 65.0
+    base_share: 35.0

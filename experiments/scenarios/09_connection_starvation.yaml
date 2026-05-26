@@ -1,0 +1,19 @@
+experiment_name: "exp_09_connection_starvation"
+description: "Idle-but-starved workload with low transactional volume but depleted connection pool slots."
+target_table: "inventory_stocks"
+pg_state:
+  table_size_mb: 256
+  active_connections: 498
+  p99_time_ms: 15.0
+  current_tps: 200.0
+  replication_lag_s: 0.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 150.0
+  peak_tps: 300.0
+  weekly_pattern: true
+  noise_variance: 0.1
+  asymmetric_skew: 0.0
+  peak_shift_hours: 0.0
+  events: []

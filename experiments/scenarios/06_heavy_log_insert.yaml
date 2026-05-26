@@ -1,0 +1,24 @@
+experiment_name: "exp_06_heavy_log_insert"
+description: "Massive write-heavy log database ingestion with periodic high-volume batch job runs."
+target_table: "order_event_logs"
+pg_state:
+  table_size_mb: 102400
+  active_connections: 100
+  p99_time_ms: 25.0
+  current_tps: 2000.0
+  replication_lag_s: 1.2
+sqlite_history:
+  days: 14
+  interval_minutes: 5
+  base_tps: 1500.0
+  peak_tps: 2500.0
+  weekly_pattern: true
+  noise_variance: 0.02
+  asymmetric_skew: -0.1
+  peak_shift_hours: 0.1
+  events:
+    - name: "Batch Job"
+      start_day: 5
+      start_hour: 0
+      duration_h: 4
+      multiplier: 2.5

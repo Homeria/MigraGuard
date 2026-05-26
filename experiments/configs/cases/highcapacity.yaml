@@ -1,0 +1,23 @@
+# 🛡️ MigraGuard Case Profile: High Capacity Configuration
+metadata:
+  case_name: "highcapacity"
+  db_path: "experiments/data/highcapacity.db"
+
+risk:
+  disk_io: 524288000  # 500MB/s (SSD High Performance)
+  mu_max: 20000.0     # 20,000 TPS Capacity
+  c_max: 2000         # 2000 Connections
+  t_meta: 20.0        # 20 ms Meta locks
+  t_timeout: 10000.0  # 10s timeout
+  thresholds:
+    danger: 80.0
+    warning: 50.0
+  weights:
+    avg_multiplier: 1.2
+    peak_multiplier: 0.8
+    concurrent_impact: 0.1
+    middle_impact: 0.5
+    base_access_exclusive_meta: 15.0  # High Capacity lowers baseline risk
+    base_access_exclusive_full: 60.0
+    base_exclusive: 30.0
+    base_share: 10.0

@@ -1,0 +1,19 @@
+experiment_name: "exp_03_steady_normal"
+description: "Stable baseline workload for a medium-scale service with predictable daily patterns."
+target_table: "orders"
+pg_state:
+  table_size_mb: 5120
+  active_connections: 50
+  p99_time_ms: 10.0
+  current_tps: 500.0
+  replication_lag_s: 0.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 400.0
+  peak_tps: 600.0
+  weekly_pattern: true
+  noise_variance: 0.05
+  asymmetric_skew: 0.0
+  peak_shift_hours: 0.0
+  events: []

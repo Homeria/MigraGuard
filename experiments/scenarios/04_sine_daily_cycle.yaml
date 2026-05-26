@@ -1,0 +1,34 @@
+experiment_name: "exp_04_sine_daily_cycle"
+description: "Weekly life pattern with deterministic daily fluctuations and dynamic flash sale spikes."
+target_table: "orders"
+pg_state:
+  table_size_mb: 10240
+  active_connections: 500
+  p99_time_ms: 15.0
+  current_tps: 3000.0
+  replication_lag_s: 0.1
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 500.0
+  peak_tps: 4500.0
+  weekly_pattern: true
+  noise_variance: 0.1
+  asymmetric_skew: 0.15
+  peak_shift_hours: 0.2
+  events:
+    - name: "Monday Morning Rush"
+      start_day: 0
+      start_hour: 9
+      duration_h: 2
+      multiplier: 1.5
+    - name: "Wednesday Flash Sale"
+      start_day: 2
+      start_hour: 20
+      duration_h: 1
+      multiplier: 3.2
+    - name: "Friday Night Fever"
+      start_day: 4
+      start_hour: 22
+      duration_h: 3
+      multiplier: 2.0
