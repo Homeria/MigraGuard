@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ type AgentService struct {
 	interval      time.Duration
 	retentionDays int
 	targetTables  []string
+	logger        types.Logger
 }
 
 // NewAgentService initializes the agent service component.
@@ -27,7 +27,16 @@ func NewAgentService(pg types.PostgresClient, sqlite types.SQLiteClient, interva
 		interval:      interval,
 		retentionDays: retentionDays,
 		targetTables:  []string{},
+		logger:        &defaultLogger{},
 	}
+}
+
+// WithLogger sets the structured logger dynamically.
+func (s *AgentService) WithLogger(l types.Logger) *AgentService {
+	if l != nil {
+		s.logger = l
+	}
+	return s
 }
 
 // SetTargetTables sets the tables for monitoring.
@@ -43,7 +52,7 @@ func (s *AgentService) SetTargetTables(tables string) {
 
 // Run executes the agent metrics collection loop.
 func (s *AgentService) Run(ctx context.Context) error {
-	col := collector.NewCollector(s.pg, s.sqlite, s.interval)
+	col := collector.NewCollector(s.pg, s.sqlite, s.interval).WithLogger(s.logger)
 	col.SetRetentionDays(s.retentionDays)
 
 	for _, table := range s.targetTables {
@@ -52,17 +61,24 @@ func (s *AgentService) Run(ctx context.Context) error {
 
 	col.Start(ctx)
 
-	fmt.Printf("[OK] MigraGuard Agent service active. (Interval: %v, Retention: %d days)\n", s.interval, s.retentionDays)
+	s.logger.Info("MigraGuard Agent service active. (Interval: %v, Retention: %d days)", s.interval, s.retentionDays)
 	if len(s.targetTables) > 0 {
-		fmt.Printf("[INFO] Monitoring tables: %v\n", s.targetTables)
+		s.logger.Info("Monitoring tables: %v", s.targetTables)
 	}
-	fmt.Println("[INFO] Collecting real-time metrics... (Ctrl+C to exit)")
+	s.logger.Info("Collecting real-time metrics... (Ctrl+C to exit)")
 
 	<-ctx.Done()
 
-	fmt.Println("\n[STOP] Gracefully shutting down Agent service...")
+	s.logger.Info("Gracefully shutting down Agent service...")
 	col.Stop()
 
 	time.Sleep(1 * time.Second)
 	return nil
 }
+
+type defaultLogger struct{}
+
+func (l *defaultLogger) Debug(msg string, args ...interface{}) {}
+func (l *defaultLogger) Info(msg string, args ...interface{})  {}
+func (l *defaultLogger) Warn(msg string, args ...interface{})  {}
+func (l *defaultLogger) Error(msg string, args ...interface{}) {}

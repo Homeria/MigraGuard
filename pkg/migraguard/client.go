@@ -164,7 +164,7 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 	if c.pg == nil {
 		return migraErrors.New(migraErrors.ErrCodeDBConn, "Client.StartAgent", "agent requires PostgreSQL connection")
 	}
-	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays)
+	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays).WithLogger(c.logger)
 	agent.SetTargetTables(targetTables)
 	return agent.Run(ctx)
 }
