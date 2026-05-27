@@ -38,9 +38,9 @@ MigraGuard는 **SDK-First 아키텍처**로 설계되어, 리스크 엔진을 �
 2.  **MigraGuard Analyze**: 마이그레이션 SQL을 AST(추상 구문 트리)로 파싱하고 저장된 패턴을 사용하여 리스크를 평가하는 CLI 도구입니다.
 
 ### 고급 디자인 패턴
-- **전략 패턴 (Strategy Pattern)**: $T_{ddl}, T_{block}, C_{peak}, T_{rec}$를 위한 모듈화된 리스크 평가 객체.
+- **전략 패턴 (Strategy Pattern)**: 5대 리스크 평가 단계를 `evaluators/` 서브 패키지 하위 개별 소스 파일로 완전히 격리하여 SRP(단일 책임 원칙) 및 OCP(개방-폐쇄 원칙) 만족.
 - **팩토리 패턴 (Factory Pattern)**: 재현 가능한 연구를 위한 **라이브 모드**와 **샌드박스 모드**의 명확한 분리.
-- **의존성 주입 (Dependency Injection)**: 높은 테스트 가능성과 관찰 가능성을 위한 완전한 도메인 로직 격리.
+- **의존성 주입 (Dependency Injection)**: 구조화된 로거(`types.Logger`)와 가상 어댑터를 Client 단계에서 동적으로 연계 주입하는 구조적 결합 격리.
 
 ---
 
@@ -62,10 +62,10 @@ MigraGuard의 핵심은 대기 행렬 이론과 데이터베이스 내부 구조
 
 ```bash
 # 7일간의 시뮬레이션 트래픽 생성
-migraguard simulate --scenario experiments/scenarios/03_spike_flash_sale.yaml
+./build/migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 
 # 시뮬레이션된 환경에 대해 분석 실행
-migraguard analyze migration.sql --sandbox experiments/data/spike.db
+./build/migraguard analyze migration.sql --config migraguard.yaml
 ```
 
 ---
