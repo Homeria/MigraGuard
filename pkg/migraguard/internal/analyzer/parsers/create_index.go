@@ -1,11 +1,11 @@
-package analyzer
+package parsers
 
 import (
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 	"github.com/pganalyze/pg_query_go/v5"
 )
 
-func analyzeCreateIndex(stmt *pg_query.IndexStmt) types.AnalysisResult {
+func AnalyzeCreateIndex(stmt *pg_query.IndexStmt) types.AnalysisResult {
 	res := types.AnalysisResult{
 		TableName:    NormalizeTableName(stmt.Relation.Relname),
 		Operation:    "CREATE INDEX",

@@ -1,11 +1,11 @@
-package analyzer
+package parsers
 
 import (
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 	"github.com/pganalyze/pg_query_go/v5"
 )
 
-func analyzeAlterTable(stmt *pg_query.AlterTableStmt) types.AnalysisResult {
+func AnalyzeAlterTable(stmt *pg_query.AlterTableStmt) types.AnalysisResult {
 	tableName := NormalizeTableName(stmt.Relation.Relname)
 	res := types.AnalysisResult{
 		TableName:    tableName,

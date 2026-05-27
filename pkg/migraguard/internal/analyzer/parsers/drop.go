@@ -1,4 +1,4 @@
-package analyzer
+package parsers
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"github.com/pganalyze/pg_query_go/v5"
 )
 
-func analyzeDrop(stmt *pg_query.DropStmt) types.AnalysisResult {
+func AnalyzeDrop(stmt *pg_query.DropStmt) types.AnalysisResult {
 	res := types.AnalysisResult{
 		Operation:    "DROP",
 		LockLevel:    types.LockLevelAccessExclusive,

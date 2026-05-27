@@ -1,4 +1,4 @@
-package analyzer
+package parsers
 
 import (
 	"fmt"
@@ -23,19 +23,19 @@ func ParseSQL(sqlText string) ([]types.AnalysisResult, error) {
 		found := false
 
 		if node.GetAlterTableStmt() != nil {
-			res = analyzeAlterTable(node.GetAlterTableStmt())
+			res = AnalyzeAlterTable(node.GetAlterTableStmt())
 			found = true
 		} else if node.GetIndexStmt() != nil {
-			res = analyzeCreateIndex(node.GetIndexStmt())
+			res = AnalyzeCreateIndex(node.GetIndexStmt())
 			found = true
 		} else if node.GetDropStmt() != nil {
-			res = analyzeDrop(node.GetDropStmt())
+			res = AnalyzeDrop(node.GetDropStmt())
 			found = true
 		} else if node.GetTruncateStmt() != nil {
-			res = analyzeTruncate(node.GetTruncateStmt())
+			res = AnalyzeTruncate(node.GetTruncateStmt())
 			found = true
 		} else if node.GetRenameStmt() != nil {
-			res = analyzeRename(node.GetRenameStmt())
+			res = AnalyzeRename(node.GetRenameStmt())
 			found = true
 		}
 

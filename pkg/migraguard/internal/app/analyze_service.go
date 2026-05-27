@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/analyzer"
+	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/analyzer/parsers"
 	migraErrors "github.com/Homeria/MigraGuard/pkg/migraguard/internal/shared/errors"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/reporter"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
@@ -42,7 +43,7 @@ func (s *AnalyzeService) Run(ctx context.Context, task AnalysisTask) (*types.Ana
 		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "failed to read SQL file")
 	}
 
-	results, err := analyzer.ParseSQL(string(sqlContent))
+	results, err := parsers.ParseSQL(string(sqlContent))
 	if err != nil {
 		return nil, migraErrors.Wrap(err, "AnalyzeService.Run", "SQL parsing error")
 	}

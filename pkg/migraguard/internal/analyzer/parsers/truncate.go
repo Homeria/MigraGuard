@@ -1,4 +1,4 @@
-package analyzer
+package parsers
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 	"github.com/pganalyze/pg_query_go/v5"
 )
 
-func analyzeTruncate(stmt *pg_query.TruncateStmt) types.AnalysisResult {
+func AnalyzeTruncate(stmt *pg_query.TruncateStmt) types.AnalysisResult {
 	res := types.AnalysisResult{
 		Operation:    "TRUNCATE",
 		LockLevel:    types.LockLevelAccessExclusive,
