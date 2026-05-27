@@ -38,9 +38,9 @@ MigraGuard is built with an **SDK-First Architecture**, ensuring that the risk e
 2.  **MigraGuard Analyze**: A CLI tool that parses migration SQL into an AST (Abstract Syntax Tree) and evaluates risks using the stored patterns.
 
 ### Advanced Design Patterns
-- **Strategy Pattern**: Modularized risk evaluators for $T_{ddl}, T_{block}, C_{peak}, T_{rec}$.
-- **Factory Pattern**: Explicit separation of **Live Mode** and **Sandbox Mode** for reproducible research.
-- **Dependency Injection**: Fully decoupled domain logic for high testability and observability.
+- **Strategy Pattern**: Isolates the 5-step risk assessment stages into atomized files under the dedicated `evaluators/` subpackage, successfully satisfying SRP and OCP.
+- **Factory Pattern**: Delivers distinct **Live Mode** and **Sandbox Mode** environments for high reproducibility.
+- **Dependency Injection**: Couples structured logger (`types.Logger`) and virtual database adapters seamlessly at the Client layer, securing complete domain decoupling.
 
 ---
 
@@ -62,10 +62,10 @@ For academic validation and "what-if" analysis, MigraGuard provides a high-fidel
 
 ```bash
 # Generate 7 days of simulated traffic
-migraguard simulate --scenario experiments/scenarios/03_spike_flash_sale.yaml
+./build/migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 
 # Run analysis against the simulated world
-migraguard analyze migration.sql --sandbox experiments/data/spike.db
+./build/migraguard analyze migration.sql --config migraguard.yaml
 ```
 
 ---
