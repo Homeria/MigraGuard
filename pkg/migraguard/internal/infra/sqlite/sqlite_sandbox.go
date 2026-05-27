@@ -29,14 +29,26 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 	interval := time.Duration(scenario.History.IntervalMinutes) * time.Minute
 	totalPoints := (scenario.History.Days * 24 * 60) / scenario.History.IntervalMinutes
 
+	// Initialize local pseudo-random generator to avoid global math/rand resource locks
+	rng := rand.New(rand.NewSource(now.UnixNano()))
+
 	tx, err := e.adapter.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	metricStmt, _ := tx.Prepare(`INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	workloadStmt, _ := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	metricStmt, err := tx.Prepare(`INSERT INTO table_metrics (timestamp, table_name, table_size, replication_lag, active_connections, p99_time, tps, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare table metrics statement: %w", err)
+	}
+	defer metricStmt.Close()
+
+	workloadStmt, err := tx.Prepare(`INSERT INTO workload_snapshots (timestamp, query_id, query, calls, total_time, shared_blks_hit, shared_blks_read) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare workload snapshots statement: %w", err)
+	}
+	defer workloadStmt.Close()
 
 	// Define tables to seed: TargetTable + auxiliary fintech tables for realistic background noise
 	tables := []string{"account_balances", "inventory_stocks", "orders", "order_event_logs", "users", "products", "logs"}
@@ -112,7 +124,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 			}
 
 			for qIdx, qText := range queries {
-				queryID := int64(1000 + (len(tables) * qIdx) + rand.Intn(10))
+				queryID := int64(1000 + (len(tables) * qIdx) + rng.Intn(10))
 				// Split total table TPS across these 3 queries (50%, 30%, 20% distribution)
 				share := 0.5
 				if qIdx == 1 { share = 0.3 } else if qIdx == 2 { share = 0.2 }
