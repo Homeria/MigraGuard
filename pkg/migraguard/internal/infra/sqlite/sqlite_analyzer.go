@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -36,8 +37,12 @@ func (a *SQLiteAdapter) GetTableBaselineStatistics(ctx context.Context, tableNam
 	var stats types.BaselineStats
 	var avg, peak sql.NullFloat64
 
-	_ = a.db.QueryRowContext(ctx, avgQuery, tableName).Scan(&avg)
-	_ = a.db.QueryRowContext(ctx, peakQuery, tableName).Scan(&peak)
+	if err := a.db.QueryRowContext(ctx, avgQuery, tableName).Scan(&avg); err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to query 1h average TPS: %w", err)
+	}
+	if err := a.db.QueryRowContext(ctx, peakQuery, tableName).Scan(&peak); err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to query 24h peak TPS: %w", err)
+	}
 
 	if avg.Valid {
 		stats.AvgTPS_1h = avg.Float64
