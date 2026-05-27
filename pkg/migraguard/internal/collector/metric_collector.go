@@ -70,15 +70,21 @@ func (c *Collector) CollectOnce(ctx context.Context) error {
 	deltas := c.computeDelta(current, previous)
 
 	if len(deltas) > 0 {
-		_ = c.sqlite.RecordDeltaSnapshots(ctx, deltas)
+		if err := c.sqlite.RecordDeltaSnapshots(ctx, deltas); err != nil {
+			return fmt.Errorf("failed to record delta snapshots: %w", err)
+		}
 	}
-	_ = c.sqlite.SynchronizeOriginalSnapshots(ctx, current)
+	if err := c.sqlite.SynchronizeOriginalSnapshots(ctx, current); err != nil {
+		return fmt.Errorf("failed to synchronize original snapshots: %w", err)
+	}
 
 	updatedTables := []string{}
 	for _, table := range c.targetTables {
 		metrics, err := c.pg.FetchTableDynamicMetrics(ctx, table)
 		if err == nil {
-			_ = c.sqlite.RecordTableDynamicMetrics(ctx, metrics)
+			if err := c.sqlite.RecordTableDynamicMetrics(ctx, metrics); err != nil {
+				return fmt.Errorf("failed to record table metrics for %s: %w", table, err)
+			}
 			updatedTables = append(updatedTables, table)
 		}
 	}
@@ -87,7 +93,9 @@ func (c *Collector) CollectOnce(ctx context.Context) error {
 		timestamp, len(deltas), updatedTables)
 
 	if c.retentionDays > 0 {
-		_ = c.sqlite.MaintenancePurgeData(ctx, c.retentionDays)
+		if err := c.sqlite.MaintenancePurgeData(ctx, c.retentionDays); err != nil {
+			return fmt.Errorf("failed to purge expired metrics: %w", err)
+		}
 	}
 
 	return nil
