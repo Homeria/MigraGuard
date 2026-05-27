@@ -1,0 +1,19 @@
+experiment_name: "exp_15_payday_rush_hour"
+description: "High transaction density around monthly payday lunch hours with severe peak shift variations."
+target_table: "account_balances"
+pg_state:
+  table_size_mb: 2048
+  active_connections: 300
+  p99_time_ms: 35.0
+  current_tps: 3800.0
+  replication_lag_s: 0.15
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 800.0
+  peak_tps: 5500.0
+  weekly_pattern: true
+  noise_variance: 0.1
+  asymmetric_skew: 0.25
+  peak_shift_hours: 1.5
+  events: []

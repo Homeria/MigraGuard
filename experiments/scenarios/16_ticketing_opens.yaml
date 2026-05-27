@@ -1,0 +1,24 @@
+experiment_name: "exp_16_ticketing_opens"
+description: "Sudden hyper-spike simulating ticket sales opening hour with extreme traffic escalation."
+target_table: "inventory_stocks"
+pg_state:
+  table_size_mb: 256
+  active_connections: 450
+  p99_time_ms: 110.0
+  current_tps: 9500.0
+  replication_lag_s: 0.8
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 50.0
+  peak_tps: 200.0
+  weekly_pattern: false
+  noise_variance: 0.15
+  asymmetric_skew: 0.60
+  peak_shift_hours: 0.1
+  events:
+    - name: "Ticket Open Day 3"
+      start_day: 3
+      start_hour: 18
+      duration_h: 1
+      multiplier: 50.0

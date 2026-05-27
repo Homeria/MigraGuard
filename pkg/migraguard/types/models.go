@@ -168,6 +168,8 @@ type SQLiteHistoryProfile struct {
 	WeeklyPattern   bool            `yaml:"weekly_pattern"` // Lower traffic on weekends
 	Events          []TimelineEvent `yaml:"events"`         // Specific marketing/spike events
 	NoiseVariance   float64         `yaml:"noise_variance"`
+	AsymmetricSkew  float64         `yaml:"asymmetric_skew"` // Skewness factor for asymmetric load curve (e.g. -0.5 to 0.5)
+	PeakShiftHours  float64         `yaml:"peak_shift_hours"` // Max random peak shift in hours
 }
 
 // TimelineEvent represents a specific time window with unusual traffic patterns.

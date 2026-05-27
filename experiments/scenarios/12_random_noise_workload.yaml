@@ -1,0 +1,19 @@
+experiment_name: "exp_12_random_noise_workload"
+description: "Highly volatile workload with massive jitter to evaluate risk engine robustness."
+target_table: "account_balances"
+pg_state:
+  table_size_mb: 1024
+  active_connections: 150
+  p99_time_ms: 30.0
+  current_tps: 1200.0
+  replication_lag_s: 0.1
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 800.0
+  peak_tps: 2500.0
+  weekly_pattern: true
+  noise_variance: 0.6
+  asymmetric_skew: 0.0
+  peak_shift_hours: 0.0
+  events: []

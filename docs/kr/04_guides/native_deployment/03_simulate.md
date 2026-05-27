@@ -45,3 +45,55 @@ migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yam
 ```powershell
 .\migraguard.exe simulate -s scenario.yaml --csv - | Out-File -FilePath metrics.csv -Encoding utf8
 ```
+
+---
+
+## 4. 고도화된 일괄 오케스트레이션 파이프라인 (Orchestration Scripts)
+
+v3.9에서 구축된 Standalone L1 마이크로 모듈들과 L2/L3 오케스트레이터를 통해, 복잡한 다차원 장비 스펙 및 DDL의 조합 시뮬레이션을 명령어 한 줄로 전수 자동화 구동할 수 있습니다. 각 플랫폼(Linux Bash, Windows PowerShell, Windows CMD Batch)별로 완벽히 대칭 설계되었습니다.
+
+### A. Linux Bash 파이프라인
+
+- **L1 Standalone 모듈**:
+  - `bash scripts/sh/modules/simulate_scenario.sh <scenario_yaml>`
+  - `bash scripts/sh/modules/dispatch_db.sh <seed_db> <case_yaml>`
+  - `bash scripts/sh/modules/analyze_single_ddl.sh <ddl> <db> <config> <out_csv>`
+- **L2 단일 시나리오 파이프라인**:
+  ```bash
+  bash scripts/sh/run_scenario_pipeline.sh experiments/scenarios/02_commuter_daily_rush.yaml
+  ```
+- **L3 글로벌 전수 오케스트레이터**:
+  ```bash
+  bash scripts/sh/run_global_pipeline.sh
+  ```
+
+### B. Windows PowerShell 파이프라인
+
+- **L1 Standalone 모듈**:
+  - `.\scripts\ps1\modules\simulate_scenario.ps1 <scenario_yaml>`
+  - `.\scripts\ps1\modules\dispatch_db.ps1 <seed_db> <case_yaml>`
+  - `.\scripts\ps1\modules\analyze_single_ddl.ps1 <ddl> <db> <config> <out_csv>`
+- **L2 단일 시나리오 파이프라인**:
+  ```powershell
+  .\scripts\ps1\run_scenario_pipeline.ps1 .\experiments\scenarios\02_commuter_daily_rush.yaml
+  ```
+- **L3 글로벌 전수 오케스트레이터**:
+  ```powershell
+  .\scripts\ps1\run_global_pipeline.ps1
+  ```
+
+### C. Windows CMD Batch 파이프라인
+
+- **L1 Standalone 모듈**:
+  - `call .\scripts\cmd\modules\simulate_scenario.cmd <scenario_yaml>`
+  - `call .\scripts\cmd\modules\dispatch_db.cmd <seed_db> <case_yaml>`
+  - `call .\scripts\cmd\modules\analyze_single_ddl.cmd <ddl> <db> <config> <out_csv>`
+- **L2 단일 시나리오 파이프라인**:
+  ```cmd
+  call .\scripts\cmd\run_scenario_pipeline.cmd experiments\scenarios\02_commuter_daily_rush.yaml
+  ```
+- **L3 글로벌 전수 오케스트레이터**:
+  ```cmd
+  call .\scripts\cmd\run_global_pipeline.cmd
+  ```
+

@@ -1,0 +1,19 @@
+experiment_name: "exp_08_over_capacity"
+description: "Degraded system state exceeding processing capacity leading to permanent queues."
+target_table: "account_balances"
+pg_state:
+  table_size_mb: 1024
+  active_connections: 500
+  p99_time_ms: 600.0
+  current_tps: 5500.0
+  replication_lag_s: 2.0
+sqlite_history:
+  days: 7
+  interval_minutes: 1
+  base_tps: 5100.0
+  peak_tps: 6000.0
+  weekly_pattern: false
+  noise_variance: 0.05
+  asymmetric_skew: 0.1
+  peak_shift_hours: 0.0
+  events: []
