@@ -26,7 +26,9 @@ docker compose run --rm analyze simulate -s ./code/scen.yaml --csv - | Out-File 
 ---
 
 ## 3. Flag Reference
-| Flag | Default | Description |
-| :--- | :--- | :--- |
-| `--scenario` | (Required) | Input YAML path (starts with `./code/`). |
-| `--csv` | - | Export path. Use `-` for stdout redirection. |
+| Flag | Shorthand | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--scenario` | `-s` | **(Required)** | Input YAML path (starts with `./code/`). |
+| `--force` | `-f` | `false` | Force overwrite the sandbox database if it already exists. |
+| `--csv` | - | - | Export path. Use `-` for stdout redirection. |
+| `--no-db` | - | `false` | Ephemeral mode. When used with `--csv`, removes the SQLite file after export. |

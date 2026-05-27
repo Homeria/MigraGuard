@@ -52,3 +52,9 @@ experiments/reports/*_plots/
 spec/total_spec.pdf
 
 logic_diagram
+
+# AI Agent Sandbox & Cli Cache
+.antigravitycli/
+
+# Batch Runs Output (Consolidated runs packing in v3.9)
+experiments/reports/batch_runs/

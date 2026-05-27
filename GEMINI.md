@@ -16,7 +16,7 @@
 
 1. **`architecture/refactoring` (PREREQUISITE)**:
    - **구현 목표**: `feat/adaptive-recommendation` 개발 전, 코드 복잡도 제어 및 관심사 분리를 위한 패키지/소스 구조 개선.
-   - **브랜치 전략**: 현재 `feature/simulation-deepening` (시뮬레이션 심화) 작업을 완료하고 `develop` 브랜치에 병합(Merge)한 후, 독립적인 별도 리팩토링 브랜치를 파고 진행할 것. (상세 계획: [refactoring_plan.md](file:///home/gyeongho/Github/MigraGuard/docs/kr/02_architecture/refactoring_plan.md) 참고)
+   - **브랜치 전략**: 현재 `feature/simulation-deepening` (시뮬레이션 심화) 작업을 완료하고 `develop` 브랜치에 병합(Merge)한 후, 독립적인 별도 리팩토링 브랜치를 파고 진행할 것. (상세 계획: [KR Plan](file:///home/gyeongho/Github/MigraGuard/docs/kr/02_architecture/refactoring_plan.md) / [EN Plan](file:///home/gyeongho/Github/MigraGuard/docs/en/02_architecture/refactoring_plan.md) 참고)
 
 2. **`feat/adaptive-recommendation` (NEXT PRIORITY)**:
    - **구현 목표**: 수집된 200개 사례 데이터를 분석하여 시스템 환경별 최적 임계값(`mu_max`, `disk_io`)을 머신러닝/통계 기반으로 자동 제안.
