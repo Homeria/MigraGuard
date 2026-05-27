@@ -93,9 +93,12 @@ func (a *SQLiteAdapter) GetTopHeavyQueries(ctx context.Context, limit int) ([]ty
 	for rows.Next() {
 		var q types.TopQueryInfo
 		if err := rows.Scan(&q.QueryID, &q.QueryText, &q.Calls, &q.TotalTime, &q.Impact); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan top heavy query row: %w", err)
 		}
 		topQueries = append(topQueries, q)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during top heavy queries iteration: %w", err)
 	}
 	return topQueries, nil
 }
@@ -125,9 +128,12 @@ func (a *SQLiteAdapter) Get24HourTrafficForecast(ctx context.Context, tableName 
 	for rows.Next() {
 		var f types.ForecastTimeSlot
 		if err := rows.Scan(&f.Hour, &f.ExpectedTPS, &f.MinTPS, &f.MaxTPS, &f.ExpectedP99); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan forecast time slot row: %w", err)
 		}
 		forecast = append(forecast, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during forecast timeline iteration: %w", err)
 	}
 
 	// Ensure we have 24 hours even if some are missing data

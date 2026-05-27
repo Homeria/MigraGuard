@@ -50,9 +50,12 @@ func (a *PostgresAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]t
 		var s types.WorkloadSnapshot
 		s.Timestamp = now
 		if err := rows.Scan(&s.QueryID, &s.Query, &s.Calls, &s.TotalTime, &s.Rows, &s.SharedBlksHit, &s.SharedBlksRead); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan postgres workload snapshot row: %w", err)
 		}
 		snapshots = append(snapshots, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during postgres workload snapshot iteration: %w", err)
 	}
 	return snapshots, nil
 }

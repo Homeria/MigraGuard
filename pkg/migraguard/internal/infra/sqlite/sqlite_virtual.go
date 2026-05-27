@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -49,9 +50,12 @@ func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]
 	for rows.Next() {
 		var s types.WorkloadSnapshot
 		if err := rows.Scan(&s.QueryID, &s.Query, &s.Calls, &s.TotalTime, &s.Rows, &s.SharedBlksHit, &s.SharedBlksRead); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan virtual workload snapshot row: %w", err)
 		}
 		snapshots = append(snapshots, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during virtual workload snapshot iteration: %w", err)
 	}
 	return snapshots, nil
 }
