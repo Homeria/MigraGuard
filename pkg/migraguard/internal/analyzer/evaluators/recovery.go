@@ -1,4 +1,4 @@
-package analyzer
+package evaluators
 
 import (
 	"context"

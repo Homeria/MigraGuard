@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/analyzer/evaluators"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
@@ -41,7 +42,7 @@ type RiskEngine struct {
 	pg         types.PostgresClient
 	sqlite     types.SQLiteClient
 	constants  types.RiskConstants
-	evaluators []StepEvaluator
+	evaluators []evaluators.StepEvaluator
 	Verbose    bool
 }
 
@@ -51,12 +52,12 @@ func NewRiskEngine(pg types.PostgresClient, sqlite types.SQLiteClient, constants
 		pg:        pg,
 		sqlite:    sqlite,
 		constants: constants,
-		evaluators: []StepEvaluator{
-			&DDLTimeEvaluator{},
-			&BlockingTimeEvaluator{},
-			&PeakConnectionEvaluator{},
-			&RecoveryTimeEvaluator{},
-			&RiskScoreEvaluator{},
+		evaluators: []evaluators.StepEvaluator{
+			&evaluators.DDLTimeEvaluator{},
+			&evaluators.BlockingTimeEvaluator{},
+			&evaluators.PeakConnectionEvaluator{},
+			&evaluators.RecoveryTimeEvaluator{},
+			&evaluators.RiskScoreEvaluator{},
 		},
 		Verbose: false,
 	}
