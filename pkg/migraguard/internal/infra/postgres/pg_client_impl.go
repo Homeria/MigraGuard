@@ -108,13 +108,17 @@ func (a *PostgresAdapter) CheckTableSchemaPresence(ctx context.Context, name str
 		var exists bool
 
 		tableQuery := `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE LOWER(table_name) = LOWER($1))`
-		_ = a.pool.QueryRow(ctx, tableQuery, n).Scan(&exists)
+		if err := a.pool.QueryRow(ctx, tableQuery, n).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to query information_schema for table: %w", err)
+		}
 		if exists {
 			continue
 		}
 
 		indexQuery := `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE LOWER(indexname) = LOWER($1))`
-		_ = a.pool.QueryRow(ctx, indexQuery, n).Scan(&exists)
+		if err := a.pool.QueryRow(ctx, indexQuery, n).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to query pg_indexes for index: %w", err)
+		}
 		if exists {
 			continue
 		}
