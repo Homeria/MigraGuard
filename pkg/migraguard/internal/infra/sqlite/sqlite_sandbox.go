@@ -151,6 +151,9 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 
 		// 2. Correlation-based Metrics
 		p99 := scenario.PGState.P99TimeMS * math.Exp(tps/scenario.History.PeakTPS-1.0)
+		if p99 > 5000.0 {
+			p99 = 5000.0 // Upper-bound latency clipping to simulate realistic client-side timeouts
+		}
 		conns := int(float64(scenario.PGState.ActiveConnections) * (tps / scenario.History.PeakTPS))
 		currentSize := scenario.PGState.TableSizeMB*1024*1024 + int64(i*1024)
 
@@ -180,8 +183,9 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 			}
 
 			// Generate Blocks (Hit/Read)
-			// Assume each transaction touches ~20 blocks on average
-			totalBlocks := int64(tableTPS * 60 * 20)
+			// Assume each transaction touches ~20 blocks on average, scaled by the interval duration
+			intervalSeconds := float64(scenario.History.IntervalMinutes * 60)
+			totalBlocks := int64(tableTPS * intervalSeconds * 20)
 			hitBlocks := int64(float64(totalBlocks) * hitRatio)
 			readBlocks := totalBlocks - hitBlocks
 
@@ -202,8 +206,9 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 				share := 0.5
 				if qIdx == 1 { share = 0.3 } else if qIdx == 2 { share = 0.2 }
 				
-				calls := int64(tableTPS * 60 * share) // calls per interval
-				totalTime := float64(calls) * p99      // total time in ms
+				intervalSeconds := float64(scenario.History.IntervalMinutes * 60)
+				calls := int64(tableTPS * intervalSeconds * share) // calls accumulated over the interval
+				totalTime := float64(calls) * p99                  // total time in ms
 				
 				qHit := int64(float64(calls*20) * hitRatio)
 				qRead := int64(calls*20) - qHit
