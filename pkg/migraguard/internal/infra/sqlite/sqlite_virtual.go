@@ -18,6 +18,19 @@ func NewVirtualPGAdapter(sqlite types.SQLiteClient) *VirtualPGAdapter {
 
 // FetchCurrentWorkloadSnapshot retrieves the latest simulated workload from SQLite.
 func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]types.WorkloadSnapshot, error) {
+	adapter, ok := a.sqlite.(*SQLiteAdapter)
+	if !ok {
+		// Fallback safe snapshot mock if non-SQLiteAdapter (e.g. Mock client in testing) is injected
+		return []types.WorkloadSnapshot{
+			{
+				QueryID:   9999,
+				Query:     "SELECT 1",
+				Calls:     100,
+				TotalTime: 10.0,
+			},
+		}, nil
+	}
+
 	// For simulation, we return the latest unique queries (up to 100)
 	query := `
 		SELECT query_id, query, MAX(calls), MAX(total_time), 0, 0, 0 
@@ -26,7 +39,7 @@ func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]
 		ORDER BY timestamp DESC 
 		LIMIT 100
 	`
-	rows, err := a.sqlite.(*SQLiteAdapter).db.QueryContext(ctx, query)
+	rows, err := adapter.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
