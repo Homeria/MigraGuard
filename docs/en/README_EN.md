@@ -73,8 +73,10 @@ For academic validation and "what-if" analysis, MigraGuard provides a high-fidel
 ./build/migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 
 # Run analysis against the simulated world
-./build/migraguard analyze migration.sql --config migraguard.yaml
+./build/migraguard analyze migration.sql --sandbox exp_05_spike_flash_sale.db --forecast
 ```
+
+The sandbox database is created in the current working directory as `<experiment_name>.db`, based on the `experiment_name` field in the scenario YAML.
 
 ---
 
@@ -93,6 +95,12 @@ migraguard agent --db "postgres://user:pass@localhost:5432/db"
 ### 2. Analyze Migration (CLI)
 ```bash
 migraguard analyze ./migrations/001_heavy_alter.sql
+```
+
+For offline experiments, pass a generated SQLite sandbox explicitly:
+
+```bash
+migraguard analyze ./migrations/001_heavy_alter.sql --sandbox exp_05_spike_flash_sale.db
 ```
 
 ---

@@ -65,8 +65,10 @@ MigraGuard의 핵심은 대기 행렬 이론과 데이터베이스 내부 구조
 ./build/migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 
 # 시뮬레이션된 환경에 대해 분석 실행
-./build/migraguard analyze migration.sql --config migraguard.yaml
+./build/migraguard analyze migration.sql --sandbox exp_05_spike_flash_sale.db --forecast
 ```
+
+샌드박스 DB는 시나리오 YAML의 `experiment_name` 값을 기준으로 현재 작업 디렉터리에 `<experiment_name>.db` 형태로 생성됩니다.
 
 ---
 
@@ -85,6 +87,12 @@ migraguard agent --db "postgres://user:pass@localhost:5432/db"
 ### 2. 마이그레이션 분석 (CLI)
 ```bash
 migraguard analyze ./migrations/001_heavy_alter.sql
+```
+
+오프라인 실험에서는 생성된 SQLite 샌드박스를 명시적으로 전달합니다.
+
+```bash
+migraguard analyze ./migrations/001_heavy_alter.sql --sandbox exp_05_spike_flash_sale.db
 ```
 
 ---

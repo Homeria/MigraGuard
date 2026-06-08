@@ -7,8 +7,10 @@ Generate deterministic workload scenarios.
 ## 1. Execution (Unified)
 This command is identical across all shells.
 ```bash
-docker compose run --rm analyze simulate --scenario ./code/experiments/scenarios/03_spike_flash_sale.yaml
+docker compose run --rm analyze simulate --scenario ./code/experiments/scenarios/05_spike_flash_sale.yaml
 ```
+
+The generated DB filename follows the `experiment_name` value in the scenario YAML.
 
 ## 2. Direct CSV Export to Host
 If using redirection to save raw metrics, note the PowerShell difference.
@@ -32,3 +34,5 @@ docker compose run --rm analyze simulate -s ./code/scen.yaml --csv - | Out-File 
 | `--force` | `-f` | `false` | Force overwrite the sandbox database if it already exists. |
 | `--csv` | - | - | Export path. Use `-` for stdout redirection. |
 | `--no-db` | - | `false` | Ephemeral mode. When used with `--csv`, removes the SQLite file after export. |
+
+Note: `--no-db` removes the generated DB only when it is used together with `--csv`.

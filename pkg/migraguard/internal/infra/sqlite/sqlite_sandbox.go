@@ -25,7 +25,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 	now := time.Now()
 	// All research data starts exactly 7 days ago at midnight for consistency
 	startTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -scenario.History.Days)
-	
+
 	interval := time.Duration(scenario.History.IntervalMinutes) * time.Minute
 	totalPoints := (scenario.History.Days * 24 * 60) / scenario.History.IntervalMinutes
 
@@ -70,7 +70,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 		isLastPoint := (i == totalPoints)
 
 		// 1. Calculate Base Traffic using the profiler strategy
-		tps := e.profiler.CalculateTPS(t, scenario.History)
+		tps := e.profiler.CalculateTPS(t, startTime, scenario.History)
 
 		// 2. Correlation-based Metrics
 		p99 := scenario.PGState.P99TimeMS * math.Exp(tps/scenario.History.PeakTPS-1.0)
@@ -83,7 +83,9 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 		// 3. I/O Simulation (Cache Hit Ratio)
 		// Base hit ratio 98%, drops slightly as TPS increases towards Peak
 		hitRatio := 0.98 - 0.05*(tps/scenario.History.PeakTPS)
-		if hitRatio < 0.85 { hitRatio = 0.85 }
+		if hitRatio < 0.85 {
+			hitRatio = 0.85
+		}
 
 		// For the last point (Now), we force it to match the requested PGState exactly
 		if isLastPoint {
@@ -93,6 +95,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 			conns = scenario.PGState.ActiveConnections
 			currentSize = scenario.PGState.TableSizeMB * 1024 * 1024
 		}
+		timestamp := t.Format("2006-01-02 15:04:05")
 
 		for _, tableName := range tables {
 			// Each table has a different load share
@@ -112,7 +115,7 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 			hitBlocks := int64(float64(totalBlocks) * hitRatio)
 			readBlocks := totalBlocks - hitBlocks
 
-			if _, err := metricStmt.Exec(t, tableName, currentSize, scenario.PGState.ReplicationLagS, conns, p99, tableTPS, hitBlocks, readBlocks); err != nil {
+			if _, err := metricStmt.Exec(timestamp, tableName, currentSize, scenario.PGState.ReplicationLagS, conns, p99, tableTPS, hitBlocks, readBlocks); err != nil {
 				return err
 			}
 
@@ -127,16 +130,20 @@ func (e *SandboxEngine) SeedScenario(scenario types.SimulationScenario) error {
 				queryID := int64(1000 + (len(tables) * qIdx) + rng.Intn(10))
 				// Split total table TPS across these 3 queries (50%, 30%, 20% distribution)
 				share := 0.5
-				if qIdx == 1 { share = 0.3 } else if qIdx == 2 { share = 0.2 }
-				
+				if qIdx == 1 {
+					share = 0.3
+				} else if qIdx == 2 {
+					share = 0.2
+				}
+
 				intervalSeconds := float64(scenario.History.IntervalMinutes * 60)
 				calls := int64(tableTPS * intervalSeconds * share) // calls accumulated over the interval
 				totalTime := float64(calls) * p99                  // total time in ms
-				
+
 				qHit := int64(float64(calls*20) * hitRatio)
 				qRead := int64(calls*20) - qHit
-				
-				if _, err := workloadStmt.Exec(t, queryID, qText, calls, totalTime, qHit, qRead); err != nil {
+
+				if _, err := workloadStmt.Exec(timestamp, queryID, qText, calls, totalTime, qHit, qRead); err != nil {
 					return err
 				}
 			}

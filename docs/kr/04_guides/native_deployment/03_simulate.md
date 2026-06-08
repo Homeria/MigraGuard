@@ -8,18 +8,20 @@ Simulate 명령은 연구 및 테스트를 위해 수학적 모델을 기반으�
 
 **Bash**
 ```bash
-./migraguard simulate --scenario experiments/scenarios/03_spike_flash_sale.yaml
+./migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 ```
 
 **PowerShell**
 ```powershell
-.\migraguard.exe simulate --scenario .\experiments\scenarios\03_spike_flash_sale.yaml
+.\migraguard.exe simulate --scenario .\experiments\scenarios\05_spike_flash_sale.yaml
 ```
 
 **CMD**
 ```cmd
-migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yaml
+migraguard.exe simulate --scenario experiments\scenarios\05_spike_flash_sale.yaml
 ```
+
+`simulate`는 시나리오 YAML의 `experiment_name` 값을 사용해 현재 작업 디렉터리에 `<experiment_name>.db` 파일을 생성합니다. 현재 CLI에는 DB 출력 경로를 직접 지정하는 플래그가 없습니다.
 
 ---
 
@@ -31,6 +33,8 @@ migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yam
 | `--force` | `-f` | `false` | **강제 덮어쓰기**. 대상 샌드박스 데이터베이스가 이미 존재하는 경우, 이 플래그를 사용하여 덮어쓸 수 있습니다. |
 | `--csv` | - | - | **CSV 내보내기 경로**. 지정된 경우 생성된 메트릭을 이 CSV 파일로도 내보냅니다. 표준 출력은 `-`를 사용하십시오. |
 | `--no-db` | - | `false` | **일회성 모드**. `--csv`와 함께 사용하면 CSV 내보내기 후 생성된 SQLite 파일을 삭제합니다. |
+
+주의: `--no-db`는 `--csv`와 함께 사용할 때만 의미가 있습니다. CSV 없이 `--no-db`만 지정하면 생성된 DB는 삭제되지 않습니다.
 
 ---
 
@@ -45,6 +49,8 @@ migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yam
 ```powershell
 .\migraguard.exe simulate -s scenario.yaml --csv - | Out-File -FilePath metrics.csv -Encoding utf8
 ```
+
+CSV 파일과 DB 파일을 모두 남기려면 `--csv <path>`만 사용합니다. CSV만 필요하고 임시 DB를 남기고 싶지 않다면 `--csv <path> --no-db`를 함께 사용합니다.
 
 ---
 
