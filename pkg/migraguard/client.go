@@ -164,7 +164,7 @@ func (c *Client) StartAgent(ctx context.Context, targetTables string) error {
 	if c.pg == nil {
 		return migraErrors.New(migraErrors.ErrCodeDBConn, "Client.StartAgent", "agent requires PostgreSQL connection")
 	}
-	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays)
+	agent := app.NewAgentService(c.pg, c.sqlite, c.config.Interval, c.config.RetentionDays).WithLogger(c.logger)
 	agent.SetTargetTables(targetTables)
 	return agent.Run(ctx)
 }
@@ -180,7 +180,7 @@ func (c *Client) Analyze(ctx context.Context, sqlPath string, forecast bool) (*t
 
 // Simulate creates a sandbox environment and seeds data based on a scenario.
 func (c *Client) Simulate(ctx context.Context, scenarioPath string, force bool) (string, error) {
-	simulateService := app.NewSimulateService(c.config.Verbose)
+	simulateService := app.NewSimulateService(c.config.Verbose, c.logger)
 	return simulateService.Run(ctx, scenarioPath, force)
 }
 

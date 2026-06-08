@@ -13,11 +13,15 @@ import (
 // SimulateService manages the declarative simulation workflow.
 type SimulateService struct {
 	Verbose bool
+	logger  types.Logger
 }
 
 // NewSimulateService initializes the simulation service.
-func NewSimulateService(verbose bool) *SimulateService {
-	return &SimulateService{Verbose: verbose}
+func NewSimulateService(verbose bool, logger types.Logger) *SimulateService {
+	return &SimulateService{
+		Verbose: verbose,
+		logger:  logger,
+	}
 }
 
 // Run executes the simulation: loading scenario, creating sandbox, and seeding data.
@@ -39,13 +43,13 @@ func (s *SimulateService) Run(ctx context.Context, scenarioPath string, force bo
 	// 3. Conditional Seeding (Persistence Logic)
 	if _, err := os.Stat(dbPath); err == nil && !force {
 		if s.Verbose {
-			fmt.Printf("[INFO] Sandbox database already exists: %s. Skipping seeding (use --force to overwrite).\n", dbPath)
+			s.logger.Info("[INFO] Sandbox database already exists: %s. Skipping seeding (use --force to overwrite).", dbPath)
 		}
 		return dbPath, nil
 	}
 
 	if s.Verbose {
-		fmt.Printf("[DEBUG] Initializing fresh sandbox database: %s\n", dbPath)
+		s.logger.Debug("[DEBUG] Initializing fresh sandbox database: %s", dbPath)
 	}
 
 	// If force or not exists, ensure clean start
@@ -63,6 +67,6 @@ func (s *SimulateService) Run(ctx context.Context, scenarioPath string, force bo
 		return "", fmt.Errorf("failed to seed scenario data: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "[OK] Simulation Sandbox seeded: %s (%s)\n", dbPath, scenario.Description)
+	s.logger.Info("[OK] Simulation Sandbox seeded: %s (%s)", dbPath, scenario.Description)
 	return dbPath, nil
 }

@@ -8,18 +8,20 @@ The Simulate command creates virtual time-series metrics based on mathematical m
 
 **Bash**
 ```bash
-./migraguard simulate --scenario experiments/scenarios/03_spike_flash_sale.yaml
+./migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 ```
 
 **PowerShell**
 ```powershell
-.\migraguard.exe simulate --scenario .\experiments\scenarios\03_spike_flash_sale.yaml
+.\migraguard.exe simulate --scenario .\experiments\scenarios\05_spike_flash_sale.yaml
 ```
 
 **CMD**
 ```cmd
-migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yaml
+migraguard.exe simulate --scenario experiments\scenarios\05_spike_flash_sale.yaml
 ```
+
+`simulate` creates `<experiment_name>.db` in the current working directory, where `experiment_name` comes from the scenario YAML. The current CLI does not provide a flag to set the sandbox DB output path directly.
 
 ---
 
@@ -31,6 +33,8 @@ migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yam
 | `--force` | `-f` | `false` | **Force Overwrite**. If the target sandbox database already exists, this flag allows the tool to overwrite it. |
 | `--csv` | - | - | **CSV Export Path**. If specified, the tool will also export the generated metrics to this CSV file. Use `-` for stdout. |
 | `--no-db` | - | `false` | **Ephemeral Mode**. If used with `--csv`, the generated SQLite file will be deleted after the CSV is exported. |
+
+Note: `--no-db` only has an effect when `--csv` is also provided. If `--no-db` is used without `--csv`, the generated DB remains on disk.
 
 ---
 
@@ -45,6 +49,8 @@ migraguard.exe simulate --scenario experiments\scenarios\03_spike_flash_sale.yam
 ```powershell
 .\migraguard.exe simulate -s scenario.yaml --csv - | Out-File -FilePath metrics.csv -Encoding utf8
 ```
+
+Use only `--csv <path>` if you want to keep both the CSV and the generated DB. Use `--csv <path> --no-db` when you only want the CSV and do not want to keep the temporary DB.
 
 ---
 

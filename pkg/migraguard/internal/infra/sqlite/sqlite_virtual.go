@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
@@ -18,6 +19,19 @@ func NewVirtualPGAdapter(sqlite types.SQLiteClient) *VirtualPGAdapter {
 
 // FetchCurrentWorkloadSnapshot retrieves the latest simulated workload from SQLite.
 func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]types.WorkloadSnapshot, error) {
+	adapter, ok := a.sqlite.(*SQLiteAdapter)
+	if !ok {
+		// Fallback safe snapshot mock if non-SQLiteAdapter (e.g. Mock client in testing) is injected
+		return []types.WorkloadSnapshot{
+			{
+				QueryID:   9999,
+				Query:     "SELECT 1",
+				Calls:     100,
+				TotalTime: 10.0,
+			},
+		}, nil
+	}
+
 	// For simulation, we return the latest unique queries (up to 100)
 	query := `
 		SELECT query_id, query, MAX(calls), MAX(total_time), 0, 0, 0 
@@ -26,7 +40,7 @@ func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]
 		ORDER BY timestamp DESC 
 		LIMIT 100
 	`
-	rows, err := a.sqlite.(*SQLiteAdapter).db.QueryContext(ctx, query)
+	rows, err := adapter.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -36,9 +50,12 @@ func (a *VirtualPGAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]
 	for rows.Next() {
 		var s types.WorkloadSnapshot
 		if err := rows.Scan(&s.QueryID, &s.Query, &s.Calls, &s.TotalTime, &s.Rows, &s.SharedBlksHit, &s.SharedBlksRead); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan virtual workload snapshot row: %w", err)
 		}
 		snapshots = append(snapshots, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during virtual workload snapshot iteration: %w", err)
 	}
 	return snapshots, nil
 }

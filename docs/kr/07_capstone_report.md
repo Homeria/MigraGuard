@@ -53,35 +53,40 @@ PostgreSQL은 테이블 및 오브젝트 수준에서 총 8가지 등급의 테�
 
 ## 3. 제안 시스템 아키텍처 (Proposed System Design)
 
-MigraGuard는 독립 모듈로 재사용 가능한 **Core SDK (`pkg/migraguard`)**와 개발자가 편리하게 명령어로 조작할 수 있는 **CLI 도구 (`cmd/migraguard`)**로 이원화되어 있다.
+MigraGuard는 독립 모듈로 재사용 가능한 **Core SDK (`pkg/migraguard`)**와 개발자가 편리하게 명령어로 조작할 수 있는 **CLI 도구 (`cmd/migraguard`)**로 이원화되어 있다. v3.9 심층 리팩토링을 통해 도메인 간의 결합도를 완벽히 제거하고 비즈니스 모델을 4개 파일로 분할하였으며, SQL AST 분석기와 리스크 평가 모듈을 독립 서브 패키지로 계층 격리 완료하였다.
 
 ```
 MigraGuard
- ├── cmd/migraguard/              # CLI 실행 계층
- │    ├── agent_service.go        # 백그라운드 지표 수집 명령
- │    ├── analyze_service.go      # DDL 위험 분석 명령
- │    └── simulate.go             # 모의 테스트베드 구동 명령
- └── pkg/migraguard/              # Core SDK 계층
-      ├── client.go               # 라이브/샌드박스 클라이언트 팩토리
-      ├── internal/analyzer/      # 5단계 리스크 엔진 & AST 파서
-      ├── simulation/             # 트래픽 부하 생성 모듈
-      └── types/                  # 데이터 모델 및 공통 인터페이스
+ ├── cmd/migraguard/                   # CLI 실행 계층 (agent, analyze, simulate 커맨드 수용)
+ └── pkg/migraguard/                   # Core SDK 계층
+      ├── client.go                    # 라이브/샌드박스 클라이언트 팩토리 및 DI 로깅 연계
+      ├── internal/
+      │    ├── app/                    # 비즈니스 서비스 오케스트레이션 (agent, analyze, simulate)
+      │    ├── analyzer/               # 정량 위험 분석 코어 엔진
+      │    │    ├── parsers/           # DDL AST 파서 전용 서브 패키지 (alter, index, drop 등)
+      │    │    └── evaluators/        # 5대 리스크 평가 전략 전용 서브 패키지
+      │    ├── collector/              # 백그라운드 성능 메트릭 수집기 (rows.Err() 예외 보완)
+      │    └── infra/                  # 물리/가상 데이터베이스 어댑터 계층
+      │         ├── postgres/          # PG 메트릭 캡처 및 rows.Err() 검사
+      │         └── sqlite/            # 샌드박스 DB 생성, rows.Err() 검증 및 local RNG 프로파일러
+      ├── simulation/                  # 프로덕션 부하 제너레이터
+      └── types/                       # 4분할 데이터 모델 (core, analysis, forecast, simulation)
 ```
 
 ### 3.1. 에이전트 및 시계열 데이터 수집 구조
-[agent_service.go](file:///home/gyeongho/Github/MigraGuard/cmd/migraguard/agent_service.go)는 주기적인 백그라운드 태스크로 구동되며, 대상 PostgreSQL에 커넥션을 맺고 다음과 같은 지표를 수집하여 로컬 SQLite 메트릭 저장소([sqlite_repository.go](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/internal/infra/sqlite/sqlite_repository.go))에 보관한다.
+`pkg/migraguard/internal/collector/metric_collector.go`는 주기적인 백그라운드 태스크로 구동되며, 대상 PostgreSQL에 커넥션을 맺고 지표를 수집하여 로컬 SQLite 메트릭 저장소(`pkg/migraguard/internal/infra/sqlite/sqlite_repository.go`)에 보관한다. v3.9 고도화에 따라 데이터베이스 조회 루프(`rows.Next()`) 직후 `rows.Err()` 검사를 의무화하여 트랜잭션 중 발생 가능한 커넥션 단절 장애를 완벽하게 예방한다.
 
 1. **TPS 및 쿼리 메트릭**: `pg_stat_statements` 뷰의 누적 호출 수(`calls`) 및 총 소요 시간(`total_exec_time`)의 델타(Delta) 값을 계산하여 주기별 초당 처리량(TPS)과 평균 처리 속도를 도출한다.
 2. **시스템 세션 지표**: `pg_stat_activity` 뷰를 스캔하여 현재 데이터베이스 인스턴스에 유지 중인 활성 커넥션 수(`active_connections`)를 수집한다.
 3. **복제 지연(Replication Lag)**: 마스터-슬레이브 복제 구성 환경의 슬레이브 지연 시간(초)을 계측한다.
 
-### 3.2. AST(Abstract Syntax Tree) 기반 SQL 파서
-[sql_parser.go](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/internal/analyzer/sql_parser.go)는 단순 정규식 비교의 한계를 벗어나기 위해 PostgreSQL의 공식 C-파서 코드를 웹어셈블리/CGo 형태로 컴파일한 `pg_query_go` 라이브러리를 활용한다.
+### 3.2. AST(Abstract Syntax Tree) 기반 SQL 파서 서브 패키지
+`pkg/migraguard/internal/analyzer/parsers/` 패키지는 단순 정규식 비교의 한계를 벗어나기 위해 PostgreSQL의 공식 C-파서 코드를 웹어셈블리/CGo 형태로 컴파일한 `pg_query_go` 라이브러리를 활용한다. v3.9 구조 개편에 따라 각 구문별 분석 로직을 아토믹 소스 코드로 격리하여 확장성을 쟁취했다.
 분석 파이프라인은 다음과 같다.
-1. 입력받은 SQL 마이그레이션 파일의 텍스트를 AST 트리 노드로 파싱한다.
-2. `AlterTableStmt`, `IndexStmt`, `RenameStmt` 등의 노드를 추출한다.
+1. 입력받은 SQL 마이그레이션 파일의 텍스트를 AST 트리 노드로 파싱한다. (`parser.go` 담당)
+2. `AlterTableStmt`, `IndexStmt`, `RenameStmt`, `DropStmt`, `TruncateStmt` 등의 노드를 각각 독립된 모듈에서 추적한다.
 3. 컬럼의 타입을 변경하는 작업(`AT_AlterColumnType`)이나 널 제약 조건을 거는 작업(`AT_SetNotNull`)과 같이 테이블 전체 데이터를 새롭게 써야 하는 **Table Rewrite** 대상 구문인지 여부를 판별한다.
-4. 구문별 락 레벨(1~8단계)을 추출하여 분석 결과를 [AnalysisResult](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/types/models.go#L58-L69) 구조체로 래핑하여 리스크 엔진에 전달한다.
+4. 구문별 락 레벨(1~8단계)을 추출하여 분석 결과를 [AnalysisResult](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/types/models_analysis.go) 구조체로 래핑하여 리스크 엔진에 전달한다.
 
 ### 3.3. CI/CD 파이프라인 통합 및 자동화 배포 게이트
 MigraGuard는 DevSecOps 사상을 기반으로 형상 관리 파이프라인과 유기적으로 결합한다. 개발자가 새로운 마이그레이션 DDL이 포함된 Pull Request를 열면, GitHub Actions 등의 CI 워크플로우에서 자동으로 CLI 실행 파일이 트리거되어 배포 승인 여부를 검증한다.
@@ -94,15 +99,15 @@ MigraGuard는 DevSecOps 사상을 기반으로 형상 관리 파이프라인과 
 
 ## 4. 5단계 정량적 리스크 모델 (5-Step Quantitative Risk Model)
 
-[risk_evaluator.go](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/internal/analyzer/risk_evaluator.go)는 Core SDK의 핵심 비즈니스 로직으로, 개방-폐쇄 원칙(OCP)을 준수하도록 설계된 전략 패턴(Strategy Pattern) 기반의 5개 단계별 평가기(StepEvaluator)들로 구현되어 있다.
+`pkg/migraguard/internal/analyzer/evaluators/` 패키지는 Core SDK의 핵심 비즈니스 로직으로, 개방-폐쇄 원칙(OCP)을 준수하도록 설계된 전략 패턴(Strategy Pattern) 기반의 5개 단계별 평가기(StepEvaluator)들로 구현되어 있다. v3.9 설계를 통해 각 평가 단계가 전용 소스 파일로 완벽 격리되었다.
 
 ```mermaid
 graph TD
     DDL[마이그레이션 SQL] --> AST[AST Parser]
-    AST -->|Rewrite 여부 & Lock Level| Step1[Step 1: DDL 소요시간 예측 T_ddl]
-    Step1 --> Step2[Step 2: 서비스 차단시간 계산 T_block]
-    Step2 --> Step3[Step 3: 커넥션 폭증 예측 C_peak]
-    Step3 --> Step4[Step 4: 시스템 회복시간 평가 T_rec]
+    AST -->|Rewrite 여부 & Lock Level| Step1[Step 1: T_ddl 예측]
+    Step1 --> Step2[Step 2: 차단시간 T_block 계산]
+    Step2 --> Step3[Step 3: 커넥션 폭증 C_peak 예측]
+    Step3 --> Step4[Step 4: 회복시간 T_rec 평가]
     Step4 --> Step5[Step 5: 리스크 판정 및 서킷 브레이크]
 ```
 
@@ -145,7 +150,9 @@ $$BestHour = \arg\min_{h \in SafeHours} (ExpectedTPS_h)$$
 ## 5. 실증 및 실험 평가 (Evaluation & Experimental Results)
 
 ### 5.1. 샌드박스 시뮬레이터 설계
-제안한 리스크 예측 모델의 환경 적응성을 검증하기 위해 오프라인 시뮬레이션 엔진([sqlite_sandbox.go](file:///home/gyeongho/Github/MigraGuard/pkg/migraguard/internal/infra/sqlite/sqlite_sandbox.go))을 설계하였다. 이 엔진은 YAML 기반의 정밀 시나리오 스펙에 맞춰 일간 사인 곡선 패턴, 주말 감쇄율, 대규모 마케팅 이벤트로 인한 트래픽 폭증(Spike), 정규 분포 노이즈(Gaussian-like Noise) 등을 시계열 메트릭 형태로 가상 생성하여 SQLite 저장소에 벌크 시딩(Seeding)한다.
+제안한 리스크 예측 모델의 환경 적응성을 검증하기 위해 오프라인 시뮬레이션 엔진(`pkg/migraguard/internal/infra/sqlite/sqlite_sandbox.go`)을 설계하였다. 이 엔진은 YAML 기반의 정밀 시나리오 스펙에 맞춰 일간 사인 곡선 패턴, 주말 감쇄율, 대규모 마케팅 이벤트로 인한 트래픽 폭증(Spike), 정규 분포 노이즈(Gaussian-like Noise) 등을 시계열 메트릭 형태로 가상 생성하여 SQLite 저장소에 벌크 시딩(Seeding)한다.
+
+v3.9 리팩토링에 따라, 샌드박스 시딩 엔진 내의 수학적 파동 연산 책임(`DefaultWorkloadProfiler`)을 `sandbox_profiler.go`로 이격시켰으며, 글로벌 난수 자원 경합을 해소하기 위한 스레드-세이프 로컬 난수(`rng`)와 `tx.Prepare` 오류 감지 안전 가드를 완비하여 시뮬레이션 데이터 생성의 무결성을 확보했다.
 
 ### 5.2. 실험 설계 (Batch Matrix)
 리스크 예측 엔진이 인프라 스펙 변동에 얼마나 적응적으로 대처하는지 평가하기 위해 다차원 배치 시뮬레이션을 구동하였다.

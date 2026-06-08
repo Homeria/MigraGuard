@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/Homeria/MigraGuard/pkg/migraguard/internal/analyzer/evaluators"
 	"github.com/Homeria/MigraGuard/pkg/migraguard/types"
 )
 
@@ -41,7 +42,7 @@ type RiskEngine struct {
 	pg         types.PostgresClient
 	sqlite     types.SQLiteClient
 	constants  types.RiskConstants
-	evaluators []StepEvaluator
+	evaluators []evaluators.StepEvaluator
 	Verbose    bool
 }
 
@@ -51,12 +52,12 @@ func NewRiskEngine(pg types.PostgresClient, sqlite types.SQLiteClient, constants
 		pg:        pg,
 		sqlite:    sqlite,
 		constants: constants,
-		evaluators: []StepEvaluator{
-			&DDLTimeEvaluator{},
-			&BlockingTimeEvaluator{},
-			&PeakConnectionEvaluator{},
-			&RecoveryTimeEvaluator{},
-			&RiskScoreEvaluator{},
+		evaluators: []evaluators.StepEvaluator{
+			&evaluators.DDLTimeEvaluator{},
+			&evaluators.BlockingTimeEvaluator{},
+			&evaluators.PeakConnectionEvaluator{},
+			&evaluators.RecoveryTimeEvaluator{},
+			&evaluators.RiskScoreEvaluator{},
 		},
 		Verbose: false,
 	}
@@ -75,14 +76,33 @@ func (e *RiskEngine) AnalyzeRisk(ctx context.Context, analysis types.AnalysisRes
 	}
 
 	if e.sqlite != nil {
-		report.CurrentTPS, _ = e.sqlite.GetRecentTPSByDelta(ctx, analysis.TableName)
-		baseline, _ := e.sqlite.GetTableBaselineStatistics(ctx, analysis.TableName)
+		currentTPS, err := e.sqlite.GetRecentTPSByDelta(ctx, analysis.TableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate recent TPS: %w", err)
+		}
+		report.CurrentTPS = currentTPS
+
+		baseline, err := e.sqlite.GetTableBaselineStatistics(ctx, analysis.TableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch table baseline statistics: %w", err)
+		}
 		if baseline != nil {
 			report.AvgTPS1h = baseline.AvgTPS_1h
 			report.PeakTPS24h = baseline.PeakTPS_24h
 		}
-		report.SafeWindow, report.SafeWindowTPS, _ = e.sqlite.IdentifySafestDeploymentWindow(ctx)
-		report.TopQueries, _ = e.sqlite.GetTopHeavyQueries(ctx, 3)
+
+		safeWindow, safeWindowTPS, err := e.sqlite.IdentifySafestDeploymentWindow(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to identify safe deployment window: %w", err)
+		}
+		report.SafeWindow = safeWindow
+		report.SafeWindowTPS = safeWindowTPS
+
+		topQueries, err := e.sqlite.GetTopHeavyQueries(ctx, 3)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch top heavy queries: %w", err)
+		}
+		report.TopQueries = topQueries
 
 		// Use configurable multipliers for conservative TPS estimation
 		weightedAvg := report.AvgTPS1h * e.constants.AvgMultiplier

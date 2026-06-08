@@ -16,6 +16,7 @@ type Collector struct {
 	retentionDays int
 	targetTables  []string
 	stopChan      chan struct{}
+	logger        types.Logger
 }
 
 // NewCollector initializes a new Collector.
@@ -26,7 +27,16 @@ func NewCollector(pg types.PostgresClient, sqlite types.SQLiteClient, interval t
 		interval:     interval,
 		targetTables: []string{},
 		stopChan:     make(chan struct{}),
+		logger:       &defaultLogger{},
 	}
+}
+
+// WithLogger sets the structured logger dynamically.
+func (c *Collector) WithLogger(l types.Logger) *Collector {
+	if l != nil {
+		c.logger = l
+	}
+	return c
 }
 
 func (c *Collector) SetRetentionDays(days int) {
@@ -46,7 +56,7 @@ func (c *Collector) Start(ctx context.Context) {
 			select {
 			case <-ticker.C:
 				if err := c.CollectOnce(ctx); err != nil {
-					fmt.Printf("[%s] collection failed: %v\n", time.Now().Format("15:04:05"), err)
+					c.logger.Error("Metric collection cycle failed: %v", err)
 				}
 			case <-c.stopChan:
 				return
@@ -58,8 +68,6 @@ func (c *Collector) Start(ctx context.Context) {
 }
 
 func (c *Collector) CollectOnce(ctx context.Context) error {
-	timestamp := time.Now().Format("15:04:05")
-
 	current, err := c.pg.FetchCurrentWorkloadSnapshot(ctx)
 	if err != nil {
 		return err
@@ -70,24 +78,31 @@ func (c *Collector) CollectOnce(ctx context.Context) error {
 	deltas := c.computeDelta(current, previous)
 
 	if len(deltas) > 0 {
-		_ = c.sqlite.RecordDeltaSnapshots(ctx, deltas)
+		if err := c.sqlite.RecordDeltaSnapshots(ctx, deltas); err != nil {
+			return fmt.Errorf("failed to record delta snapshots: %w", err)
+		}
 	}
-	_ = c.sqlite.SynchronizeOriginalSnapshots(ctx, current)
+	if err := c.sqlite.SynchronizeOriginalSnapshots(ctx, current); err != nil {
+		return fmt.Errorf("failed to synchronize original snapshots: %w", err)
+	}
 
 	updatedTables := []string{}
 	for _, table := range c.targetTables {
 		metrics, err := c.pg.FetchTableDynamicMetrics(ctx, table)
 		if err == nil {
-			_ = c.sqlite.RecordTableDynamicMetrics(ctx, metrics)
+			if err := c.sqlite.RecordTableDynamicMetrics(ctx, metrics); err != nil {
+				return fmt.Errorf("failed to record table metrics for %s: %w", table, err)
+			}
 			updatedTables = append(updatedTables, table)
 		}
 	}
 
-	fmt.Printf("[%s] Metric collection complete: %d queries recorded | Tables: %v\n",
-		timestamp, len(deltas), updatedTables)
+	c.logger.Info("Metric collection complete: %d queries recorded | Tables: %v", len(deltas), updatedTables)
 
 	if c.retentionDays > 0 {
-		_ = c.sqlite.MaintenancePurgeData(ctx, c.retentionDays)
+		if err := c.sqlite.MaintenancePurgeData(ctx, c.retentionDays); err != nil {
+			return fmt.Errorf("failed to purge expired metrics: %w", err)
+		}
 	}
 
 	return nil
@@ -124,3 +139,10 @@ func (c *Collector) computeDelta(curr []types.WorkloadSnapshot, prev map[int64]t
 func (c *Collector) Stop() {
 	close(c.stopChan)
 }
+
+type defaultLogger struct{}
+
+func (l *defaultLogger) Debug(msg string, args ...interface{}) {}
+func (l *defaultLogger) Info(msg string, args ...interface{})  {}
+func (l *defaultLogger) Warn(msg string, args ...interface{})  {}
+func (l *defaultLogger) Error(msg string, args ...interface{}) {}

@@ -1,6 +1,6 @@
 # 🖥️ Native: 05. Check (Health Check)
 
-The Check command performs a self-diagnostic on the MigraGuard environment and connectivity.
+The `check` command quickly verifies that MigraGuard can initialize the PostgreSQL connection and SQLite storage it needs.
 
 ---
 
@@ -27,12 +27,13 @@ migraguard.exe check --db "postgres://user:pass@host:5432/db"
 
 | Flag | Shorthand | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--db` | - | (From Config) | **Target PostgreSQL URL**. Verifies connection and checks if the `pg_stat_statements` extension is loaded. |
-| `--sqlite` | - | (From Config) | **Target SQLite Path**. Verifies that the file exists and is writable by the current user. |
+| `--db` | - | (From Config) | **Target PostgreSQL URL**. Verifies that MigraGuard can connect to PostgreSQL and ping it. |
+| `--sqlite` | - | (From Config) | **Target SQLite Path**. Verifies that MigraGuard can open the SQLite store and initialize its schema. |
 
 ---
 
-## 3. Diagnostic Checklist
-1.  **PostgreSQL Connection**: Checks DNS resolution and authentication.
-2.  **Extension Verification**: Confirms `pg_stat_statements` is in `shared_preload_libraries`.
-3.  **SQLite Health**: Verifies disk space and write permissions.
+## 3. Current Check Scope
+1.  **PostgreSQL connection**: DSN parsing, connection pool creation, and ping.
+2.  **SQLite initialization**: Opens the configured SQLite path and creates the base MigraGuard tables if needed.
+
+Note: the current `check` command does not separately verify that `pg_stat_statements` is loaded, that `shared_preload_libraries` is configured, or that disk space is sufficient. Verify those items during database setup or when running the `agent`.

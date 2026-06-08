@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -49,9 +50,12 @@ func (a *PostgresAdapter) FetchCurrentWorkloadSnapshot(ctx context.Context) ([]t
 		var s types.WorkloadSnapshot
 		s.Timestamp = now
 		if err := rows.Scan(&s.QueryID, &s.Query, &s.Calls, &s.TotalTime, &s.Rows, &s.SharedBlksHit, &s.SharedBlksRead); err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan postgres workload snapshot row: %w", err)
 		}
 		snapshots = append(snapshots, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during postgres workload snapshot iteration: %w", err)
 	}
 	return snapshots, nil
 }
@@ -65,25 +69,33 @@ func (a *PostgresAdapter) FetchTableDynamicMetrics(ctx context.Context, tableNam
 		t = strings.TrimSpace(t)
 		var size int64
 		var conns int
-		var p99 float64
-		var tps float64
+		
+		// Use NullFloat64 to safely handle potentially NULL query results under low traffic
+		var p99, tps sql.NullFloat64
 
-		_ = a.pool.QueryRow(ctx, "SELECT pg_total_relation_size($1)", t).Scan(&size)
+		if err := a.pool.QueryRow(ctx, "SELECT pg_total_relation_size($1)", t).Scan(&size); err != nil {
+			return nil, fmt.Errorf("failed to fetch table relation size: %w", err)
+		}
 		metrics.TableSize += size
 
 		activeQuery := `SELECT count(*) FROM pg_stat_activity WHERE query LIKE '%' || $1 || '%' AND state = 'active' AND pid <> pg_backend_pid();`
-		_ = a.pool.QueryRow(ctx, activeQuery, t).Scan(&conns)
+		if err := a.pool.QueryRow(ctx, activeQuery, t).Scan(&conns); err != nil {
+			return nil, fmt.Errorf("failed to query active connections: %w", err)
+		}
 		if conns > metrics.ActiveConnections {
 			metrics.ActiveConnections = conns
 		}
 
 		statsQuery := `SELECT PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY max_exec_time) as p99_time, SUM(calls) / GREATEST(EXTRACT(EPOCH FROM (now() - (SELECT stats_reset FROM pg_stat_statements_info))), 1) as tps FROM pg_stat_statements WHERE query LIKE '%' || $1 || '%';`
-		_ = a.pool.QueryRow(ctx, statsQuery, t).Scan(&p99, &tps)
-		if p99 > metrics.P99Time {
-			metrics.P99Time = p99
+		if err := a.pool.QueryRow(ctx, statsQuery, t).Scan(&p99, &tps); err != nil {
+			return nil, fmt.Errorf("failed to query pg_stat_statements metrics: %w", err)
 		}
-		if tps > metrics.TPS {
-			metrics.TPS = tps
+		
+		if p99.Valid && p99.Float64 > metrics.P99Time {
+			metrics.P99Time = p99.Float64
+		}
+		if tps.Valid && tps.Float64 > metrics.TPS {
+			metrics.TPS = tps.Float64
 		}
 	}
 
@@ -99,13 +111,17 @@ func (a *PostgresAdapter) CheckTableSchemaPresence(ctx context.Context, name str
 		var exists bool
 
 		tableQuery := `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE LOWER(table_name) = LOWER($1))`
-		_ = a.pool.QueryRow(ctx, tableQuery, n).Scan(&exists)
+		if err := a.pool.QueryRow(ctx, tableQuery, n).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to query information_schema for table: %w", err)
+		}
 		if exists {
 			continue
 		}
 
 		indexQuery := `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE LOWER(indexname) = LOWER($1))`
-		_ = a.pool.QueryRow(ctx, indexQuery, n).Scan(&exists)
+		if err := a.pool.QueryRow(ctx, indexQuery, n).Scan(&exists); err != nil {
+			return fmt.Errorf("failed to query pg_indexes for index: %w", err)
+		}
 		if exists {
 			continue
 		}

@@ -46,9 +46,9 @@ MigraGuard follows an **SDK-First Modular Architecture**. For detailed visual ma
 2.  **MigraGuard Analyze**: A CLI tool that parses migration SQL into an AST (Abstract Syntax Tree) and evaluates risks using the stored patterns.
 
 ### Advanced Design Patterns
-- **Strategy Pattern**: Modularized risk evaluators for $T_{ddl}, T_{block}, C_{peak}, T_{rec}$.
-- **Factory Pattern**: Explicit separation of **Live Mode** and **Sandbox Mode** for reproducible research.
-- **Dependency Injection**: Fully decoupled domain logic for high testability and observability.
+- **Strategy Pattern**: Isolates the 5-step risk assessment stages into atomized files under the dedicated `evaluators/` subpackage, successfully satisfying SRP and OCP.
+- **Factory Pattern**: Delivers distinct **Live Mode** and **Sandbox Mode** environments for high reproducibility.
+- **Dependency Injection**: Couples structured logger (`types.Logger`) and virtual database adapters seamlessly at the Client layer, securing complete domain decoupling.
 
 ---
 
@@ -70,11 +70,13 @@ For academic validation and "what-if" analysis, MigraGuard provides a high-fidel
 
 ```bash
 # Generate 7 days of simulated traffic
-migraguard simulate --scenario experiments/scenarios/03_spike_flash_sale.yaml
+./build/migraguard simulate --scenario experiments/scenarios/05_spike_flash_sale.yaml
 
 # Run analysis against the simulated world
-migraguard analyze migration.sql --sandbox experiments/data/spike.db
+./build/migraguard analyze migration.sql --sandbox exp_05_spike_flash_sale.db --forecast
 ```
+
+The sandbox database is created in the current working directory as `<experiment_name>.db`, based on the `experiment_name` field in the scenario YAML.
 
 ---
 
@@ -93,6 +95,12 @@ migraguard agent --db "postgres://user:pass@localhost:5432/db"
 ### 2. Analyze Migration (CLI)
 ```bash
 migraguard analyze ./migrations/001_heavy_alter.sql
+```
+
+For offline experiments, pass a generated SQLite sandbox explicitly:
+
+```bash
+migraguard analyze ./migrations/001_heavy_alter.sql --sandbox exp_05_spike_flash_sale.db
 ```
 
 ---
