@@ -13,6 +13,9 @@ migraguard.exe
 *.test
 *.prof
 
+# Python
+*.pyc
+
 # SQLite / Local Database
 *.db
 *.db-journal

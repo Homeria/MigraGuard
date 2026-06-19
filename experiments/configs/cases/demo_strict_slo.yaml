@@ -1,0 +1,22 @@
+metadata:
+  case_name: "demo_strict_slo"
+  db_path: "experiments/data/demo_strict_slo.db"
+
+risk:
+  disk_io: 104857600
+  mu_max: 5000.0
+  c_max: 500
+  t_meta: 100.0
+  t_timeout: 5000.0
+  thresholds:
+    danger: 60.0
+    warning: 50.0
+  weights:
+    avg_multiplier: 1.2
+    peak_multiplier: 0.8
+    concurrent_impact: 0.1
+    middle_impact: 0.5
+    base_access_exclusive_meta: 30.0
+    base_access_exclusive_full: 85.0
+    base_exclusive: 50.0
+    base_share: 20.0

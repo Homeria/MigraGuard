@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="900" viewBox="0 0 1800 900">
+  <defs>
+    <style>
+      .title { font: 700 34px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #17233b; }
+      .section { font: 700 22px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #17233b; }
+      .label { font: 700 20px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #ffffff; }
+      .body { font: 400 18px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #334155; }
+      .small { font: 400 16px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #475569; }
+      .smallLight { font: 400 16px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #eaf2f8; }
+      .formula { font: 700 22px Consolas, monospace; fill: #173c68; }
+      .stageTitle { font: 700 17px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #173c68; }
+      .stageBody { font: 400 14px "Malgun Gothic", "Noto Sans KR", sans-serif; fill: #475569; }
+      .arrow { fill: none; stroke: #64748b; stroke-width: 4; marker-end: url(#arrowhead); }
+      .mergeArrow { fill: none; stroke: #1f5f8b; stroke-width: 5; marker-end: url(#arrowheadBlue); }
+    </style>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M0,0 L10,6 L0,12 Z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowheadBlue" markerWidth="12" markerHeight="12" refX="9" refY="6" orient="auto">
+      <path d="M0,0 L10,6 L0,12 Z" fill="#1f5f8b"/>
+    </marker>
+  </defs>
+
+  <rect width="1800" height="900" fill="#ffffff"/>
+  <text x="900" y="58" text-anchor="middle" class="title">MigraGuard 배포 전 위험도 분석 흐름</text>
+  <line x1="130" y1="82" x2="1670" y2="82" stroke="#d9e2ec" stroke-width="2"/>
+
+  <!-- Source inputs -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="165" width="215" height="132" rx="18" fill="#244a73"/>
+    <rect x="55" y="558" width="215" height="132" rx="18" fill="#356859"/>
+  </g>
+  <text x="162" y="215" text-anchor="middle" class="label">DDL SQL</text>
+  <text x="162" y="249" text-anchor="middle" class="smallLight">배포 예정 변경문</text>
+  <text x="162" y="603" text-anchor="middle" class="label">운영 DB</text>
+  <text x="162" y="636" text-anchor="middle" class="label">또는 시뮬레이션</text>
+  <text x="162" y="667" text-anchor="middle" class="smallLight">실행 시점의 상태</text>
+
+  <!-- Extraction boxes -->
+  <g filter="url(#shadow)">
+    <rect x="345" y="120" width="300" height="225" rx="18" fill="#f7faff" stroke="#6f9bc7" stroke-width="3"/>
+    <rect x="345" y="512" width="300" height="225" rx="18" fill="#f5fbf8" stroke="#63a58b" stroke-width="3"/>
+  </g>
+  <rect x="345" y="120" width="300" height="58" rx="18" fill="#376996"/>
+  <path d="M345 160 H645 V178 H345 Z" fill="#376996"/>
+  <text x="495" y="158" text-anchor="middle" class="label">정적 특성 추출</text>
+  <text x="385" y="213" class="body">• 작업 유형</text>
+  <text x="385" y="246" class="body">• 잠금 수준</text>
+  <text x="385" y="279" class="body">• 테이블 재작성 여부</text>
+  <text x="385" y="312" class="body">• 인덱스 관련 여부</text>
+
+  <rect x="345" y="512" width="300" height="58" rx="18" fill="#4f8a72"/>
+  <path d="M345 552 H645 V570 H345 Z" fill="#4f8a72"/>
+  <text x="495" y="550" text-anchor="middle" class="label">동적 지표 수집</text>
+  <text x="385" y="605" class="body">• 대상 테이블 크기</text>
+  <text x="385" y="638" class="body">• 요청량과 P99 응답 지연</text>
+  <text x="385" y="671" class="body">• 활성 커넥션</text>
+  <text x="385" y="704" class="body">• 복제 지연</text>
+
+  <!-- Source arrows -->
+  <path d="M270 231 H325" class="arrow"/>
+  <path d="M270 624 H325" class="arrow"/>
+
+  <!-- Merge -->
+  <path d="M645 232 H700 Q735 232 735 267 V357" class="mergeArrow"/>
+  <path d="M645 624 H700 Q735 624 735 589 V499" class="mergeArrow"/>
+  <g filter="url(#shadow)">
+    <path d="M735 335 L815 428 L735 521 L655 428 Z" fill="#eaf3fb" stroke="#2f6f9f" stroke-width="4"/>
+  </g>
+  <text x="735" y="414" text-anchor="middle" class="section">정적·동적</text>
+  <text x="735" y="445" text-anchor="middle" class="section">지표 결합</text>
+
+  <!-- Risk model container -->
+  <g filter="url(#shadow)">
+    <rect x="860" y="128" width="650" height="600" rx="22" fill="#fbfcfe" stroke="#9ab4cc" stroke-width="3"/>
+  </g>
+  <rect x="860" y="128" width="650" height="68" rx="22" fill="#e7eef6"/>
+  <path d="M860 174 H1510 V196 H860 Z" fill="#e7eef6"/>
+  <text x="1185" y="172" text-anchor="middle" class="section">5단계 위험도 판단 모델</text>
+
+  <!-- Model stages -->
+  <g filter="url(#shadow)">
+    <rect x="900" y="232" width="570" height="72" rx="14" fill="#edf5fb" stroke="#7ca7c9" stroke-width="2"/>
+    <rect x="900" y="326" width="570" height="72" rx="14" fill="#edf5fb" stroke="#7ca7c9" stroke-width="2"/>
+    <rect x="900" y="420" width="570" height="72" rx="14" fill="#edf5fb" stroke="#7ca7c9" stroke-width="2"/>
+    <rect x="900" y="514" width="570" height="72" rx="14" fill="#edf5fb" stroke="#7ca7c9" stroke-width="2"/>
+    <rect x="900" y="608" width="570" height="72" rx="14" fill="#fff4e8" stroke="#df9c55" stroke-width="2"/>
+  </g>
+  <text x="935" y="278" class="formula">1. T_ddl</text>
+  <text x="1085" y="263" class="stageTitle">예상 DDL 수행 시간</text>
+  <text x="1085" y="286" class="stageBody">테이블 재작성 여부와 데이터 처리 비용 반영</text>
+  <text x="935" y="372" class="formula">2. T_block</text>
+  <text x="1085" y="357" class="stageTitle">예상 쿼리 영향 시간</text>
+  <text x="1085" y="380" class="stageBody">DDL 수행 시간, 지연 상태, 잠금 영향도 반영</text>
+  <text x="935" y="466" class="formula">3. C_peak</text>
+  <text x="1085" y="451" class="stageTitle">최대 커넥션 압력</text>
+  <text x="1085" y="474" class="stageBody">대기 시간 동안 누적되는 요청과 커넥션 추정</text>
+  <text x="935" y="560" class="formula">4. T_rec</text>
+  <text x="1085" y="545" class="stageTitle">정상 상태 회복 시간</text>
+  <text x="1085" y="568" class="stageBody">누적 요청과 DB 최대 처리량을 이용한 회복 가능성 판단</text>
+  <text x="935" y="654" class="formula">5. RiskScore</text>
+  <text x="1115" y="639" class="stageTitle">최종 위험도 산출</text>
+  <text x="1115" y="662" class="stageBody">DDL 기본 위험과 커넥션 압력을 종합</text>
+  <path d="M1185 304 V318" class="arrow"/>
+  <path d="M1185 398 V412" class="arrow"/>
+  <path d="M1185 492 V506" class="arrow"/>
+  <path d="M1185 586 V600" class="arrow"/>
+
+  <!-- Merge to model -->
+  <path d="M815 428 H842" class="mergeArrow"/>
+
+  <!-- Outputs -->
+  <g filter="url(#shadow)">
+    <rect x="1570" y="235" width="180" height="390" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="3"/>
+  </g>
+  <text x="1660" y="276" text-anchor="middle" class="section">최종 등급</text>
+  <rect x="1595" y="310" width="130" height="72" rx="13" fill="#2e8b57"/>
+  <rect x="1595" y="405" width="130" height="72" rx="13" fill="#f2b134"/>
+  <rect x="1595" y="500" width="130" height="72" rx="13" fill="#c83e4d"/>
+  <text x="1660" y="355" text-anchor="middle" class="label">Safe</text>
+  <text x="1660" y="450" text-anchor="middle" class="label">Warning</text>
+  <text x="1660" y="545" text-anchor="middle" class="label">Danger</text>
+  <text x="1660" y="602" text-anchor="middle" class="small">단계별 산출값과</text>
+  <text x="1660" y="626" text-anchor="middle" class="small">판단 근거 제공</text>
+  <path d="M1510 428 H1552" class="mergeArrow"/>
+
+  <!-- Footer note -->
+  <rect x="345" y="788" width="1165" height="62" rx="14" fill="#f8fafc" stroke="#d8e1eb" stroke-width="2"/>
+  <text x="927" y="826" text-anchor="middle" class="body">DDL 정적 특성과 실행 시점의 DB 상태를 별도의 위험 모델에 적용하여 배포 전 동적 영향을 추정</text>
+</svg>
