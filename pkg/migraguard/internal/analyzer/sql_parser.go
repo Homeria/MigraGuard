@@ -127,6 +127,7 @@ func analyzeAlterTable(stmt *pg_query.AlterTableStmt) types.AnalysisResult {
 func analyzeCreateIndex(stmt *pg_query.IndexStmt) types.AnalysisResult {
 	res := types.AnalysisResult{
 		TableName:    NormalizeTableName(stmt.Relation.Relname),
+		IsIndex:      true,
 		Operation:    "CREATE INDEX",
 		LockLevel:    types.LockLevelShare,
 		MetadataOnly: false,

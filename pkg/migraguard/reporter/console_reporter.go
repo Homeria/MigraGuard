@@ -52,8 +52,18 @@ func (r *ConsoleReporter) Write(results []types.AnalysisResult, reports []*types
 		}
 
 		fmt.Println("\n [ADVICE] Recommendation")
+		forecast := findForecastForTable(forecasts, res.TableName)
+		bestSlot, hasForecastWindow := forecastBestSlot(forecast)
 		if report.RiskLevel == "Safe" {
 			fmt.Println("  [SAFE] Deployment looks safe under current workload.")
+		} else if hasForecastWindow && bestSlot.RiskLevel == "Safe" {
+			fmt.Printf("  [SAFE] Consider delaying until the forecast window: [%02d:00]\n", bestSlot.Hour)
+		} else if hasForecastWindow && bestSlot.RiskLevel == "Warning" {
+			fmt.Printf("  [WARNING] Conditional forecast window: [%02d:00]. Use extra approval and monitoring.\n", bestSlot.Hour)
+		} else if forecast != nil && forecast.BestHour == -1 {
+			fmt.Println("  [DANGER] No non-danger forecast window found. Consider postponing or changing migration strategy.")
+		} else if report.SafeWindow == "" {
+			fmt.Println("  [WARNING] No safe low-traffic window found. Consider postponing or changing migration strategy.")
 		} else {
 			fmt.Printf("  [WARNING] Consider delaying until the golden window: [%s] (Est. %.1f TPS)\n",
 				report.SafeWindow, report.SafeWindowTPS)
@@ -63,7 +73,15 @@ func (r *ConsoleReporter) Write(results []types.AnalysisResult, reports []*types
 		for _, f := range forecasts {
 			if f.TableName == res.TableName {
 				fmt.Printf("\n [FORECAST] 24-Hour Prediction Summary\n")
-				fmt.Printf("  - Recommended Golden Window: %02d:00\n", f.BestHour)
+				if slot, ok := forecastBestSlot(f); ok {
+					if slot.RiskLevel == "Warning" {
+						fmt.Printf("  - Conditional Forecast Window: %02d:00 (Warning)\n", slot.Hour)
+					} else {
+						fmt.Printf("  - Recommended Forecast Window: %02d:00 (Safe)\n", slot.Hour)
+					}
+				} else {
+					fmt.Printf("  - Recommended Forecast Window: No non-danger window found\n")
+				}
 				fmt.Printf("  - Predictive CSV generated for visualization.\n")
 			}
 		}

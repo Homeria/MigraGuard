@@ -67,14 +67,33 @@ func (r *MarkdownReporter) Write(results []types.AnalysisResult, reports []*type
 		for _, f := range forecasts {
 			if f.TableName == res.TableName {
 				fmt.Println("\n### [FORECAST] Predictive 24-Hour Analysis")
-				fmt.Printf("- **Optimal Execution Window**: **%02d:00**\n", f.BestHour)
+				if slot, ok := forecastBestSlot(f); ok {
+					if slot.RiskLevel == "Warning" {
+						fmt.Printf("- **Conditional Execution Window**: **%02d:00** (`Warning`)\n", slot.Hour)
+						fmt.Println("- **Note**: This is not a safe window. Additional approval and monitoring are required.")
+					} else {
+						fmt.Printf("- **Recommended Execution Window**: **%02d:00** (`Safe`)\n", slot.Hour)
+					}
+				} else {
+					fmt.Println("- **Recommended Execution Window**: **No non-danger window found**")
+				}
 				fmt.Println("- **Visualization**: Generated predictive risk heatmap CSV.")
 			}
 		}
 
 		fmt.Println("\n### [ADVICE] Conclusion and Recommendation")
+		forecast := findForecastForTable(forecasts, res.TableName)
+		bestSlot, hasForecastWindow := forecastBestSlot(forecast)
 		if report.RiskLevel == "Safe" {
 			fmt.Println("> [SAFE] Deployment is expected to have minimal impact.")
+		} else if hasForecastWindow && bestSlot.RiskLevel == "Safe" {
+			fmt.Printf("> [SAFE] Recommend deploying during the forecast window: **%02d:00**.\n", bestSlot.Hour)
+		} else if hasForecastWindow && bestSlot.RiskLevel == "Warning" {
+			fmt.Printf("> [WARNING] Conditional forecast window: **%02d:00**. Additional approval and monitoring are required.\n", bestSlot.Hour)
+		} else if forecast != nil && forecast.BestHour == -1 {
+			fmt.Println("> [DANGER] No non-danger forecast window found. Consider postponing or changing migration strategy.")
+		} else if report.SafeWindow == "" {
+			fmt.Println("> [WARNING] No safe low-traffic window found. Consider postponing or changing migration strategy.")
 		} else {
 			fmt.Printf("> [WARNING] Recommend deploying during the Golden window: **%s** (Est. %.1f TPS).\n", report.SafeWindow, report.SafeWindowTPS)
 		}

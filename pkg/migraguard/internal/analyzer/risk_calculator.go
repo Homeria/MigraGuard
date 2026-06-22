@@ -125,6 +125,7 @@ func (e *RiskEngine) AnalyzeForecast(ctx context.Context, analysis types.Analysi
 		BestHour:  -1,
 	}
 
+	bestRank := 99
 	minScore := 9999.0
 	minTPS := 999999.0
 
@@ -150,23 +151,55 @@ func (e *RiskEngine) AnalyzeForecast(ctx context.Context, analysis types.Analysi
 		// Update slot results
 		slot.RiskScore = tempReport.RiskScore
 		slot.RiskLevel = tempReport.RiskLevel
-		slot.IsSafeWindow = tempReport.RiskScore < e.constants.ThresholdWarning
+		p99TailRisk := hasP99TailRisk(analysis, slot, tempReport)
+		if p99TailRisk && slot.RiskScore < e.constants.ThresholdWarning {
+			slot.RiskScore = e.constants.ThresholdWarning
+			slot.RiskLevel = "Warning"
+		}
+		slot.IsSafeWindow = tempReport.RiskScore < e.constants.ThresholdWarning && !p99TailRisk
 
-		// Best Hour Selection with TPS Tie-breaker
-		// 1. If lower risk score found, update best hour
-		// 2. If risk scores are equal (using epsilon for float stability), choose lower TPS
-		isLowerScore := slot.RiskScore < (minScore - 0.001)
-		isEqualScore := math.Abs(slot.RiskScore-minScore) < 0.001
-		isLowerTPS := slot.ExpectedTPS < minTPS
-
-		if isLowerScore || (isEqualScore && isLowerTPS) {
-			minScore = slot.RiskScore
-			minTPS = slot.ExpectedTPS
-			report.BestHour = slot.Hour
+		// Prefer Safe forecast windows. If none exists, keep the least risky
+		// Warning window as a conditional recommendation. Danger windows are not
+		// recommended.
+		if rank, ok := forecastRecommendationRank(slot); ok {
+			isBetterLevel := rank < bestRank
+			isSameLevel := rank == bestRank
+			isLowerScore := slot.RiskScore < (minScore - 0.001)
+			isEqualScore := math.Abs(slot.RiskScore-minScore) < 0.001
+			isLowerTPS := slot.ExpectedTPS < minTPS
+			if isBetterLevel || (isSameLevel && (isLowerScore || (isEqualScore && isLowerTPS))) {
+				bestRank = rank
+				minScore = slot.RiskScore
+				minTPS = slot.ExpectedTPS
+				report.BestHour = slot.Hour
+			}
 		}
 
 		report.Timeline = append(report.Timeline, slot)
 	}
 
 	return report, nil
+}
+
+func forecastRecommendationRank(slot types.ForecastTimeSlot) (int, bool) {
+	switch slot.RiskLevel {
+	case "Safe":
+		return 0, true
+	case "Warning":
+		return 1, true
+	default:
+		return 0, false
+	}
+}
+
+func hasP99TailRisk(analysis types.AnalysisResult, slot types.ForecastTimeSlot, report *types.RiskAnalysisReport) bool {
+	if analysis.LockLevel < types.LockLevelShare {
+		return false
+	}
+	if slot.ExpectedTPS <= 0 || slot.ExpectedP99 <= 0 {
+		return false
+	}
+
+	impactedRequests := slot.ExpectedTPS * (report.BlockingTime / 1000.0)
+	return impactedRequests >= 1.0 && report.BlockingTime >= slot.ExpectedP99*5.0
 }
